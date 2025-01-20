@@ -7,9 +7,55 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
-
 const app = express();
 const PORT = process.env.PORT || 3037;
+
+const Razorpay = require('razorpay');
+
+const razorpay = new Razorpay({
+    key_id: rzp_live_yXsVK0MDLDGBUd, // Your Key ID
+    key_secret: lmN667tXEgw76aMTcun5eHul, // Your Key Secret
+});
+
+app.post('/create-order', async (req, res) => {
+    const { amount, currency, receipt } = req.body;
+
+    try {
+        const options = {
+            amount: amount * 100, // Amount in smallest currency unit (e.g., 100 = 1 INR)
+            currency: currency || 'INR',
+            receipt: receipt || `receipt_${Date.now()}`,
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.status(200).json({ success: true, order });
+    } catch (error) {
+        console.error('Error creating Razorpay order:', error);
+        res.status(500).json({ success: false, message: 'Failed to create order', error: error.message });
+    }
+});
+
+
+app.post('/verify-payment', (req, res) => {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    try {
+        const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
+        hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+        const generatedSignature = hmac.digest('hex');
+
+        if (generatedSignature === razorpay_signature) {
+            // Payment verified successfully
+            res.status(200).json({ success: true, message: 'Payment verified' });
+        } else {
+            res.status(400).json({ success: false, message: 'Payment verification failed' });
+        }
+    } catch (error) {
+        console.error('Error verifying payment:', error);
+        res.status(500).json({ success: false, message: 'Payment verification failed', error: error.message });
+    }
+});
+
 
 
 
@@ -25,18 +71,7 @@ app.options('*', cors());
 
 app.use(bodyParser.json());
 
-// Configure multer storage for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    console.log('Uploading file to uploads directory');
-    cb(null, 'uploads/'); // Directory to save the uploaded files
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    console.log('Saving file as:', file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+
 
 
 const upload = multer({ storage: storage });
@@ -44,8 +79,7 @@ const upload = multer({ storage: storage });
 const ACCESS_TOKEN = 'EAB2dUthO3SoBOxMFQAZAq9TUameZCnKMyK2Ey9jwGpg98VU7CrcUaVNHOBsWJjpTbSwjShuRG7af9eGESHmBF1HXwkZAHfxTnnM6VBPgD405v3ZBNdyZAJ6YJyBlJneL1LjA4ZAzuRf9rMwZAeyhO0g6stpq4BJ8X4g1pxWMTN70ogWPKNSCtW9c5mEA7pAh3N1OwZDZD';
 
 const FB_API_URL = `https://graph.facebook.com/v14.0/1244760100199023/events?access_token=${ACCESS_TOKEN}`;
-const TELEGRAM_BOT_TOKEN = '6962504638:AAFkba3-vDDSYu6j69FJMG2ZH2G2MWpi3J0';
-const TELEGRAM_CHAT_ID = '7434740689';
+
 
 // Helper function to validate IP address format
 function isValidIpAddress(ip) {
@@ -106,44 +140,6 @@ app.post('/track-event', async (req, res) => {
     }
 });
 
-// Form Submission Endpoint with file upload
-app.post('/submit', upload.single('paymentScreenshot'), async (req, res) => {
-    const { amountDropdown, utr, email, username } = req.body;
-    const paymentScreenshot = req.file;
-
-    try {
-        // Telegram text message with payment details
-        const telegramMessage = `
-  
-          ${utr || 'N/A'}
-          
-        `;
-
-        // Send the text message to Telegram
-        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: telegramMessage
-        });
-
-        // Send the screenshot file to Telegram if uploaded
-        if (paymentScreenshot) {
-            const screenshotFilePath = path.resolve(paymentScreenshot.path);
-
-            const formData = new FormData();
-            formData.append('chat_id', TELEGRAM_CHAT_ID);
-            formData.append('photo', fs.createReadStream(screenshotFilePath));
-
-            await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, formData, {
-                headers: formData.getHeaders(),
-            });
-        }
-
-        res.status(200).json({ success: true, message: 'Form submission and Telegram notification sent successfully, including screenshot.' });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error sending Telegram notification', error: error.message });
-    }
-});
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
