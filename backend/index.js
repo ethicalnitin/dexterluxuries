@@ -9,13 +9,12 @@ const path = require('path');
 const FormData = require('form-data');
 const app = express();
 const PORT = process.env.PORT || 3037;
-
 const Razorpay = require('razorpay');
 
-const razorpay = new Razorpay({
-    key_id: rzp_live_yXsVK0MDLDGBUd, // Your Key ID
-    key_secret: lmN667tXEgw76aMTcun5eHul, // Your Key Secret
-});
+const razorpayInstance = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID, // Access the environment variable
+    key_secret: process.env.RAZORPAY_KEY_SECRET, // Add this if you also have a secret
+  });
 
 app.post('/create-order', async (req, res) => {
     const { amount, currency, receipt } = req.body;
