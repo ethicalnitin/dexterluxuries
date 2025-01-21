@@ -39,7 +39,7 @@ const Landingpage = () => {
 
     try {
         // Step 1: Create order from the backend
-        const response = await fetch('http://localhost:3037/create-order', {
+        const response = await fetch('https://dexterluxuries.onrender.com/create-order', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -61,7 +61,7 @@ const Landingpage = () => {
 
         // Step 2: Set up Razorpay payment options
         const options = {
-            key: 'rzp_test_ybdnW1uNNYjzkm',  // Replace with your Razorpay Key ID
+            key: 'rzp_live_IBUbVztIrhM0tE',  // Replace with your Razorpay Key ID
             amount: order.amount, // Amount in paise (500 = ₹5)
             currency: order.currency,
             name: 'Dexter Luxuries',
@@ -70,7 +70,7 @@ const Landingpage = () => {
             handler: async function (response) {
                 // Step 3: Verify payment
                 try {
-                    const verificationResponse = await fetch('http://localhost:3037/verify-payment', {
+                    const verificationResponse = await fetch('https://dexterluxuries.onrender.com/verify-payment', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
