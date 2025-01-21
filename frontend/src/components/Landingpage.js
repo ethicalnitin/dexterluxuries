@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { FaWhatsapp, FaTelegram, FaStar } from 'react-icons/fa';
 import logo from './lgo.jpeg';
 import productImage from './finalbcpost.png';
-import {Footer} from './Footer';
+import { Footer } from './Footer';
 
 const Landingpage = () => {
   const [selectedPlan, setSelectedPlan] = useState('Lifetime');
   const [isLoading, setIsLoading] = useState(false); // Loading state
+  const [error, setError] = useState(''); // Error state
 
   const planDetails = {
     'Lifetime': { price: 297, strikeThroughPrice: 999 },
@@ -16,148 +17,94 @@ const Landingpage = () => {
   const telegramUrl = `https://t.me/dextersenior`;
   const proofsUrl = 'https://shorturl.at/Nsuke';
 
-  // Function to send events to backend for Conversion API
-  const sendEventToBackend = async (eventName, additionalData = {}) => {
-    const backendUrl = 'https://backend1-ztvf.onrender.com/track-event'; // Your backend URL
-
-    const postData = {
-      event_name: eventName,
-      event_time: Math.floor(Date.now() / 1000),
-      event_source_url: window.location.href,
-      action_source: 'website',
-      user_data: {
-        email: 'testuser@example.com', // Replace with real user data
-        client_ip_address: await fetch('https://api64.ipify.org?format=json').then(res => res.json()).then(data => data.ip), // Fetch IP dynamically
-        client_user_agent: navigator.userAgent
-      },
-      ...additionalData
-    };
-
-    try {
-      const response = await fetch(backendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(postData)
-      });
-
-      if (!response.ok) {
-        console.error('Error sending event to backend:', response);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  // Track PageView on load (both browser-side and server-side)
-  useEffect(() => {
-    // Browser-side pixel tracking
-    
-     
-    // Server-side tracking via CAPI
-    sendEventToBackend('PageView');
-console.log('pageview capi lp done');
-  }, []);
-
-  // Handle WhatsApp button click (both browser-side and server-side)
+  // Handle WhatsApp button click
   const handleWhatsappClick = () => {
-    // Browser-side pixel tracking
-    if (window.fbq) {
-      window.fbq('track', 'ViewContent', {
-        content_name: 'WhatsApp Contact',
-        content_category: 'Contact',
-        content_type: 'button',
-      });
-    }
-
-    // Server-side tracking via CAPI
-    sendEventToBackend('ViewContent', {
-      custom_data: {
-        content_name: 'WhatsApp Contact',
-        content_category: 'Contact',
-      }
-    });
-
     window.open(whatsappUrl, '_blank');
   };
 
-  // Handle Proofs button click (both browser-side and server-side)
+  // Handle Proofs button click
   const handleProofsClick = () => {
-    // Browser-side pixel tracking
-    if (window.fbq) {
-      window.fbq('trackCustom', 'ProofAndVouches', {
-        action: 'Click',
-      });
-    }
-
-    // Server-side tracking via CAPI
-    sendEventToBackend('ProofAndVouches', {
-      custom_data: {
-        action: 'Click',
-      }
-    });
-
     window.open(proofsUrl, '_blank');
   };
 
-  // Handle Telegram button click (browser only)
+  // Handle Telegram button click
   const handleTelegramClick = () => {
-    // Browser-side pixel tracking
-    if (window.fbq) {
-      window.fbq('track', 'ViewContent', {
-        content_name: 'Telegram',
-        content_category: 'Contact',
-        content_type: 'button',
-      });
-    }
-
-    // Server-side tracking via CAPI
-    sendEventToBackend('ViewContent', {
-      custom_data: {
-        content_name: 'Telegram',
-        content_category: 'Contact',
-      }
-    });
-
     window.open(telegramUrl, '_blank');
   };
 
-  // Handle Buy Now button click (both browser-side and server-side)
+  // Handle Buy Now button click
   const handleBuyNowClick = async () => {
-    // If already loading, prevent multiple clicks
-    if (isLoading) return;
-  
-    setIsLoading(true); // Set loading state to true when Buy Now is clicked
-    const planPrice = planDetails[selectedPlan].price;
-  
-    // Browser-side pixel tracking
-    if (window.fbq) {
-      window.fbq('track', 'InitiateCheckout', {
-        value: planPrice,
-        currency: 'INR',
-        content_ids: [`plan_${selectedPlan}`],
-        content_type: 'product',
-        num_items: 1,
-      });
-    }
-  
-    // Server-side tracking via CAPI
+    setIsLoading(true);
+    setError('');
+
     try {
-      await sendEventToBackend('InitiateCheckout', {
-        custom_data: {
-          value: planPrice,
-          currency: 'INR',
-          content_ids: [`plan_${selectedPlan}`],
+        // Step 1: Create order from the backend
+        const response = await fetch('http://localhost:3037/create-order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                amount: 297, // Amount in INR (e.g., ₹5)
+                currency: 'INR',
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            setError('Failed to create order.');
+            return;
         }
-      });
-  
-      console.log('pageview capi lp done');
-      window.location.href = `https://payments.cybermafia.shop?amount=${planPrice}`;
+
+        const { order } = data;
+
+        // Step 2: Set up Razorpay payment options
+        const options = {
+            key: 'rzp_test_ybdnW1uNNYjzkm',  // Replace with your Razorpay Key ID
+            amount: order.amount, // Amount in paise (500 = ₹5)
+            currency: order.currency,
+            name: 'Dexter Luxuries',
+            description: 'Payment for Digital Product',
+            order_id: order.id, // Order ID from backend
+            handler: async function (response) {
+                // Step 3: Verify payment
+                try {
+                    const verificationResponse = await fetch('http://localhost:3037/verify-payment', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            razorpay_order_id: order.id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        }),
+                    });
+
+                    const verifyData = await verificationResponse.json();
+
+                    if (verifyData.success) {
+                        alert('Payment verified successfully!');
+                    } else {
+                        alert('Payment verification failed!');
+                    }
+                } catch (error) {
+                    alert('Error verifying payment');
+                }
+            },
+            theme: {
+                color: '#F37254',
+            },
+        };
+
+        const razorpay = new window.Razorpay(options);
+        razorpay.open();
     } catch (error) {
-      console.error('Error:', error);
+        setError('Error initiating payment. Please try again later.');
+        console.error(error);
     } finally {
-      setIsLoading(false); // Reset loading state after the redirect or error
+        setIsLoading(false);
     }
   };
 
@@ -257,13 +204,16 @@ console.log('pageview capi lp done');
       {selectedPlan === '12-month' && <span className="text-red-500 font-semibold">Limited Offer</span>}
       <span className="text-gray-500 line-through">₹{planDetails[selectedPlan].strikeThroughPrice}</span>
     </div>
-    <button
-      onClick={handleBuyNowClick}
-      className={`bg-red-500 text-white py-3 px-6 rounded-full transition duration-300 shadow-md cursor-pointer ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-600'}`}
-      disabled={isLoading}
-    >
-      <span className="font-bold">{isLoading ? 'Loading...' : 'Buy Now'}</span>
-    </button>
+    <button 
+  id="buy-now-button" 
+  onClick={handleBuyNowClick} 
+  disabled={isLoading}
+  className={`w-48 py-3 px-5 text-white font-bold rounded-md shadow-lg transition-all duration-300 ease-in-out transform ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-red-500 hover:to-pink-500'}`}
+>
+  {isLoading ? 'Processing...' : 'Buy Now'}
+</button>
+
+
   </div>
   <Footer/>
 </div>
