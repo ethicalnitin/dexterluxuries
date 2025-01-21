@@ -14,6 +14,11 @@ const razorpayInstance = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET, // Razorpay Key Secret
 });
 
+console.log('Key ID:', process.env.RAZORPAY_KEY_ID);
+console.log('Key Secret:', process.env.RAZORPAY_KEY_SECRET);
+
+
+
 // Middleware configuration
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
 app.use(bodyParser.json());
