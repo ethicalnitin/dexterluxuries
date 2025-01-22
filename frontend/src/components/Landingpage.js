@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useState } from 'react';
 import { FaWhatsapp, FaTelegram, FaStar } from 'react-icons/fa';
 import logo from './lgo.jpeg';
 import productImage from './finalbcpost.png';
