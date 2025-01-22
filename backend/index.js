@@ -26,6 +26,7 @@ app.use(bodyParser.json());
 // Create a Razorpay order
 app.post('/create-order', async (req, res) => {
     const { amount, currency, receipt } = req.body;
+    console.log("Working");
 
     try {
         const options = {
@@ -36,6 +37,7 @@ app.post('/create-order', async (req, res) => {
 
         const order = await razorpayInstance.orders.create(options);
         res.status(200).json({ success: true, order });
+        
     } catch (error) {
         console.error('Error creating Razorpay order:', error);
         res.status(500).json({ success: false, message: 'Failed to create order', error: error.message });
