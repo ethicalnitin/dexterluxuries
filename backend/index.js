@@ -1,8 +1,8 @@
 const express = require('express');
 const Razorpay = require('razorpay');
-const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const cors = require('cors');
+const compression = require('compression');
 require('dotenv').config();
 
 const app = express();
@@ -14,37 +14,47 @@ const razorpayInstance = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET, // Razorpay Key Secret
 });
 
-console.log('Key ID:', process.env.RAZORPAY_KEY_ID);
-console.log('Key Secret:', process.env.RAZORPAY_KEY_SECRET);
-
-
-
 // Middleware configuration
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
-app.use(bodyParser.json());
+app.use(compression()); // Enable Gzip compression
+app.use(express.json()); // Built-in middleware for parsing JSON requests
 
-// Create a Razorpay order
+// Helper function: Create Razorpay order with retries
+async function createOrderWithRetry(options, retries = 3) {
+    try {
+        return await razorpayInstance.orders.create(options);
+    } catch (error) {
+        if (retries > 0) {
+            console.log(`Retrying order creation, attempts left: ${retries}`);
+            return createOrderWithRetry(options, retries - 1);
+        } else {
+            throw error;
+        }
+    }
+}
+
+// Route: Create a Razorpay order
 app.post('/create-order', async (req, res) => {
-    const { amount, currency, receipt } = req.body;
-    console.log("Working");
+    const { amount, currency = 'INR', receipt } = req.body; // Default currency to INR
+    console.log('Order creation initiated.');
 
     try {
         const options = {
-            amount: amount * 100, // Amount in smallest currency unit (e.g., paise for INR)
-            currency: currency || 'INR',
+            amount: amount * 100, // Convert amount to smallest currency unit (paise for INR)
+            currency,
             receipt: receipt || `receipt_${Date.now()}`,
         };
 
-        const order = await razorpayInstance.orders.create(options);
+        // Use helper function to create order with retry logic
+        const order = await createOrderWithRetry(options);
         res.status(200).json({ success: true, order });
-        
     } catch (error) {
         console.error('Error creating Razorpay order:', error);
         res.status(500).json({ success: false, message: 'Failed to create order', error: error.message });
     }
 });
 
-// Verify Razorpay payment
+// Route: Verify Razorpay payment
 app.post('/verify-payment', (req, res) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
