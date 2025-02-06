@@ -42,7 +42,7 @@ const ProductPage = () => {
       const response = await fetch("https://dexterluxuries.onrender.com/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: product.price * 100, currency: "INR" }),
+        body: JSON.stringify({ amount: product.price * 1, currency: "INR" }),
       });
 
       const data = await response.json();
@@ -50,7 +50,7 @@ const ProductPage = () => {
 
       const { order } = data;
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: 'rzp_live_qzRYRxbSri7zLo',
         amount: order.amount,
         currency: order.currency,
         name: "Dexter Luxuries",
