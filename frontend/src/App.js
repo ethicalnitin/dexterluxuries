@@ -6,6 +6,9 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Navbar from "./components/Navbar";
 import { Footer } from "./components/Footer";
+import RefundPolicy from './pages/RefundPolicy';  // Import the Refund Policy page
+import PrivacyPolicy from './pages/PrivacyPolicy';  // Import the Privacy Policy page
+
 
 import './index.css';
 
@@ -22,6 +25,8 @@ function App(){
           <Route path="/product/:id" element={<ProductPage />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         </Routes>
         <Footer ref={footerRef} />
       </Router>
