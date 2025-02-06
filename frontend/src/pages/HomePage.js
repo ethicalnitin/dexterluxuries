@@ -6,14 +6,12 @@ const HomePage = () => {
   return (
     <div className="container mx-auto px-4 py-6">
       {/* Hero Section */}
-      <div className="relative w-full h-96 bg-cover bg-center mb-8 rounded-lg overflow-hidden"
-           style={{ backgroundImage: "url('/assets/lgo.jpeg')" }} >
-        <div className="absolute inset-0 bg-black opacity-50"></div>
-        
-      </div>
+      
+
+
 
       {/* Introductory Section */}
-      <div className="text-center mb-12">
+      <div className="text-center mb-12 pt-20">
         <p className="text-lg md:text-xl text-gray-600">
           Discover our exclusive collection of luxurious products. Shop the finest items designed to elevate your lifestyle.
         </p>

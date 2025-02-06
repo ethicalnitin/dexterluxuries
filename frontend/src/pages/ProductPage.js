@@ -20,6 +20,8 @@ const ProductPage = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+
+    window.scrollTo(0,0);
     const foundProduct = products.find((p) => p.id === Number(id));
     setProduct(foundProduct);
   }, [id]);
