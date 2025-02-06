@@ -1,6 +1,66 @@
 
 
 const products = [
+
+  {
+    id: 7,
+    name: "TradingView Premium Plan (3/6/12)-2025",
+    price : 499,
+    strikeThroughPrice: 3995, 
+    image: "/productimages/p7.png",
+    description : `
+    <div class="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg">
+<h2 class="text-2xl font-semibold text-gray-800 text-center mb-6">🎯 Unlock TradingView Premium - Elevate Your Trading Experience 🎯</h2>
+
+<p class="text-gray-700 mb-6 text-center">
+  Get access to TradingView Premium and enjoy the full range of advanced trading tools, features, and support that will take your trading to the next level.
+</p>
+
+<h3 class="text-xl font-semibold text-gray-900 mb-4">🕒 Activation within 30 minutes</h3>
+<p class="text-gray-700 mb-6">
+  Once you make your purchase, your TradingView Premium account will be activated within 30 minutes, and you’ll receive the activation details directly to your email.
+</p>
+
+<h3 class="text-xl font-semibold text-gray-900 mb-4">🔒 Official Account & 100% Safe & Secure</h3>
+<p class="text-gray-700 mb-6">
+  You’ll get an official TradingView Premium account, ensuring that all your data is 100% safe and secure. No need to worry about your privacy or security.
+</p>
+
+<h3 class="text-xl font-semibold text-gray-900 mb-4">💎 All Premium Features Included</h3>
+<ul class="list-disc ml-6 space-y-3 text-gray-700 mb-6">
+  <li><strong>📊 Unlimited Chart Layouts:</strong> Create as many chart layouts as you need.</li>
+  <li><strong>🧰 Advanced Charting Tools:</strong> Unlock pro-level charting features for in-depth analysis.</li>
+  <li><strong>📈 More Indicators per Chart (up to 25):</strong> Add up to 25 indicators for accurate insights.</li>
+  <li><strong>🔔 Enhanced Alerts (up to 400 alerts):</strong> Set up to 400 alerts to track your trading signals.</li>
+  <li><strong>📱 Multiple Device Access:</strong> Use your account across devices, seamlessly switching between them.</li>
+  <li><strong>🛠️ Premium Support:</strong> Get top-tier support to resolve any issues or queries fast.</li>
+  <li><strong>🕒 More Data on Historical Charts:</strong> Access extended historical data for deeper analysis.</li>
+  <li><strong>🚫 Ad-Free Experience:</strong> Enjoy an uninterrupted, ad-free trading experience.</li>
+  <li><strong>⏰ Extended Trading Hours:</strong> Trade outside of regular market hours for greater flexibility.</li>
+  <li><strong>📉 Volume Profile Indicators:</strong> Analyze market volume at different price levels.</li>
+  <li><strong>💡 Backtesting and Strategy Building:</strong> Test your trading strategies and optimize them.</li>
+  <li><strong>🕒 Custom Time Intervals:</strong> Choose from a wide range of time intervals for your charts.</li>
+  <li><strong>🌍 Access to More Data Sources:</strong> Get even more data for better decision-making.</li>
+  <li><strong>💬 Priority Customer Support:</strong> Skip the queue and get fast-track support.</li>
+  <li><strong>🖋️ Pine Script Editor:</strong> Create and customize your own trading indicators and strategies.</li>
+  <li><strong>✏️ Smart Drawing Tools:</strong> Make precise technical analysis drawings with ease.</li>
+  <li><strong>💻 Access to TradingView's Desktop App:</strong> Take your trading anywhere with the dedicated desktop app.</li>
+</ul>
+
+<h3 class="text-xl font-semibold text-gray-900 mb-4">🚀 Get Started Today!</h3>
+<p class="text-gray-700 mb-6">
+  With TradingView Premium, you’ll get everything you need to stay ahead in the market. Whether you’re a beginner or an experienced trader, this account will provide you with the tools, data, and support you need to succeed.
+</p>
+
+<div class="flex justify-center items-center mt-6">
+  
+  
+</div>
+</div>
+
+
+    `,
+  },
     {
           id: 1,
           name: "Software Engineering Placement Bundle-2025",
@@ -329,65 +389,7 @@ const products = [
       `,
     },
     
-    {
-      id: 7,
-      name: "TradingView Premium Plan (3/6/12)-2025",
-      price : 499,
-      strikeThroughPrice: 3995, 
-      image: "/productimages/p7.png",
-      description : `
-      <div class="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-  <h2 class="text-2xl font-semibold text-gray-800 text-center mb-6">🎯 Unlock TradingView Premium - Elevate Your Trading Experience 🎯</h2>
-  
-  <p class="text-gray-700 mb-6 text-center">
-    Get access to TradingView Premium and enjoy the full range of advanced trading tools, features, and support that will take your trading to the next level.
-  </p>
-  
-  <h3 class="text-xl font-semibold text-gray-900 mb-4">🕒 Activation within 30 minutes</h3>
-  <p class="text-gray-700 mb-6">
-    Once you make your purchase, your TradingView Premium account will be activated within 30 minutes, and you’ll receive the activation details directly to your email.
-  </p>
-
-  <h3 class="text-xl font-semibold text-gray-900 mb-4">🔒 Official Account & 100% Safe & Secure</h3>
-  <p class="text-gray-700 mb-6">
-    You’ll get an official TradingView Premium account, ensuring that all your data is 100% safe and secure. No need to worry about your privacy or security.
-  </p>
-  
-  <h3 class="text-xl font-semibold text-gray-900 mb-4">💎 All Premium Features Included</h3>
-  <ul class="list-disc ml-6 space-y-3 text-gray-700 mb-6">
-    <li><strong>📊 Unlimited Chart Layouts:</strong> Create as many chart layouts as you need.</li>
-    <li><strong>🧰 Advanced Charting Tools:</strong> Unlock pro-level charting features for in-depth analysis.</li>
-    <li><strong>📈 More Indicators per Chart (up to 25):</strong> Add up to 25 indicators for accurate insights.</li>
-    <li><strong>🔔 Enhanced Alerts (up to 400 alerts):</strong> Set up to 400 alerts to track your trading signals.</li>
-    <li><strong>📱 Multiple Device Access:</strong> Use your account across devices, seamlessly switching between them.</li>
-    <li><strong>🛠️ Premium Support:</strong> Get top-tier support to resolve any issues or queries fast.</li>
-    <li><strong>🕒 More Data on Historical Charts:</strong> Access extended historical data for deeper analysis.</li>
-    <li><strong>🚫 Ad-Free Experience:</strong> Enjoy an uninterrupted, ad-free trading experience.</li>
-    <li><strong>⏰ Extended Trading Hours:</strong> Trade outside of regular market hours for greater flexibility.</li>
-    <li><strong>📉 Volume Profile Indicators:</strong> Analyze market volume at different price levels.</li>
-    <li><strong>💡 Backtesting and Strategy Building:</strong> Test your trading strategies and optimize them.</li>
-    <li><strong>🕒 Custom Time Intervals:</strong> Choose from a wide range of time intervals for your charts.</li>
-    <li><strong>🌍 Access to More Data Sources:</strong> Get even more data for better decision-making.</li>
-    <li><strong>💬 Priority Customer Support:</strong> Skip the queue and get fast-track support.</li>
-    <li><strong>🖋️ Pine Script Editor:</strong> Create and customize your own trading indicators and strategies.</li>
-    <li><strong>✏️ Smart Drawing Tools:</strong> Make precise technical analysis drawings with ease.</li>
-    <li><strong>💻 Access to TradingView's Desktop App:</strong> Take your trading anywhere with the dedicated desktop app.</li>
-  </ul>
-  
-  <h3 class="text-xl font-semibold text-gray-900 mb-4">🚀 Get Started Today!</h3>
-  <p class="text-gray-700 mb-6">
-    With TradingView Premium, you’ll get everything you need to stay ahead in the market. Whether you’re a beginner or an experienced trader, this account will provide you with the tools, data, and support you need to succeed.
-  </p>
-  
-  <div class="flex justify-center items-center mt-6">
     
-    
-  </div>
-</div>
-
-
-      `,
-    },
   ];
   
   export default products;
