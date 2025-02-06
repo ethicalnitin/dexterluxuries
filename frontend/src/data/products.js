@@ -332,7 +332,7 @@ const products = [
     {
       id: 7,
       name: "TradingView Premium Plan (3/6/12)-2025",
-      price : 11,
+      price : 499,
       strikeThroughPrice: 3995, 
       image: "/productimages/p7.png",
       description : `
