@@ -6,7 +6,7 @@ const HomePage = () => {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
-    fetch("https://dexterluxuries.onrender.com/api/products") // API call to backend
+    fetch("http://localhost:3040/api/products/") // API call to backend
       .then((res) => res.json())
       .then((data) => setProducts(data))
       .catch((error) => console.error("Error fetching products:", error));
