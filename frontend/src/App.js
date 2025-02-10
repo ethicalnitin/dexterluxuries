@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import ProductPage from "./pages/ProductPage";
@@ -14,7 +14,7 @@ import './index.css';
 
 function App(){
 
-  const footerRef = useRef(null);
+ 
   
     return (
       <Router>
@@ -28,7 +28,7 @@ function App(){
           <Route path="/refund-policy" element={<RefundPolicy />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         </Routes>
-        <Footer ref={footerRef} />
+        <Footer />
       </Router>
       
     );
