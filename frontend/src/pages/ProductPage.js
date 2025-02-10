@@ -13,107 +13,114 @@ const reviews = [
 ];
 
 const ProductPage = () => {
-  
+ 
+  const [product, setProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPaying, setIsPaying] = useState(false);
+  const [error, setError] = useState("");
+
   const { id } = useParams();
-const [product, setProduct] = useState(null);
-const [isLoading, setIsLoading] = useState(true);
-const [isPaying, setIsPaying] = useState(false);
-const [error, setError] = useState("");
 
-useEffect(() => {
-  window.scrollTo(0, 0);
 
-  const fetchProduct = async () => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
     setError("");
     setIsLoading(true);
 
-    try {
-      const response = await fetch(`http://localhost:3040/api/products/${id}`);
-      const data = await response.json();
+    // Function to check if ID is a valid number
+    const isValidNumericId = (id) => /^\d+$/.test(id); // Ensures it's only digits
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch product");
-      }
-
-      setProduct(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    if (!id || !isValidNumericId(id)) {
+      setError("Invalid product ID format. ID must be a number.");
       setIsLoading(false);
+      return;
+    }
+
+    const fetchProduct = async () => {
+      try {
+        const response = await fetch(`https://dexterluxuries.onrender.com/api/products/${id}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to fetch product");
+        }
+
+        setProduct(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id]);
+  if (isLoading) {
+    return <div className="text-center mt-20 text-lg font-bold">Loading product details...</div>;
+  }
+
+  if (error || !product) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <h2 className="text-center text-xl font-semibold text-red-500">⚠️ {error || "Product not found"}</h2>
+      </div>
+    );
+  }
+
+  const handleBuyNowClick = async () => {
+    setIsPaying(true);
+    setError("");
+
+    try {
+      const response = await fetch("https://dexterluxuries.onrender.com/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: product.price, currency: "INR" }),
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error("Failed to create order.");
+
+      const { order } = data;
+      const options = {
+        key: "rzp_live_qzRYRxbSri7zLo",
+        amount: order.amount,
+        currency: order.currency,
+        name: "Dexter Luxuries",
+        description: product.name,
+        order_id: order.id,
+        handler: async function (response) {
+          try {
+            const verifyResponse = await fetch("https://dexterluxuries.onrender.com/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: order.id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyResponse.json();
+            if (verifyData.success) alert("✅ Payment successful!");
+            else alert("❌ Payment verification failed!");
+          } catch (error) {
+            alert("Error verifying payment");
+          }
+        },
+        theme: { color: "#F37254" },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      setError("⚠️ Error processing payment. Try again later.");
+      console.error(error);
+    } finally {
+      setIsPaying(false);
     }
   };
 
-  fetchProduct();
-}, [id]);
-
-if (isLoading) {
-  return <div className="text-center mt-20 text-lg font-bold">Loading product details...</div>;
-}
-
-if (!product) {
-  return (
-    <div className="flex items-center justify-center h-screen">
-      <h2 className="text-center text-xl font-semibold text-red-500">
-        ⚠️ Product not found
-      </h2>
-    </div>
-  );
-}
-
-const handleBuyNowClick = async () => {
-  setIsPaying(true);
-  setError("");
-
-  try {
-    const response = await fetch("https://dexterluxuries.onrender.com/create-order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: product.price, currency: "INR" }),
-    });
-
-    const data = await response.json();
-    if (!data.success) throw new Error("Failed to create order.");
-
-    const { order } = data;
-    const options = {
-      key: "rzp_live_qzRYRxbSri7zLo",
-      amount: order.amount,
-      currency: order.currency,
-      name: "Dexter Luxuries",
-      description: product.name,
-      order_id: order.id,
-      handler: async function (response) {
-        try {
-          const verifyResponse = await fetch("https://dexterluxuries.onrender.com/verify-payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              razorpay_order_id: order.id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            }),
-          });
-
-          const verifyData = await verifyResponse.json();
-          if (verifyData.success) alert("✅ Payment successful!");
-          else alert("❌ Payment verification failed!");
-        } catch (error) {
-          alert("Error verifying payment");
-        }
-      },
-      theme: { color: "#F37254" },
-    };
-
-    const razorpay = new window.Razorpay(options);
-    razorpay.open();
-  } catch (error) {
-    setError("⚠️ Error processing payment. Try again later.");
-    console.error(error);
-  } finally {
-    setIsPaying(false);
-  }
-};
-  
   const carouselSettings = {
     dots: false,
     infinite: true,
@@ -125,8 +132,7 @@ const handleBuyNowClick = async () => {
     arrows: false,
   };
 
-  const countdownEnd = new Date();
-  countdownEnd.setHours(countdownEnd.getHours() + 1);
+  const countdownEnd = new Date(Date.now() + 3600000); // Set countdown for 1 hour from now
 
   return (
     <div className="max-w-6xl mx-auto p-2 mt-2">
@@ -168,10 +174,10 @@ const handleBuyNowClick = async () => {
           <button
             id="buy-now-button"
             onClick={handleBuyNowClick}
-            disabled={isLoading}
-            className={`mt-1 w-auto md:w-48 py-3 px-20 text-white font-bold rounded-lg shadow-lg transition-all duration-200 ease-in-out ${isLoading ? "bg-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-red-500 hover:to-pink-500"}`}
+            disabled={isPaying}
+            className={`mt-1 w-auto md:w-48 py-3 px-20 text-white font-bold rounded-lg shadow-lg transition-all duration-200 ease-in-out ${isPaying ? "bg-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-pink-500 to-red-500 hover:from-red-500 hover:to-pink-500"}`}
           >
-            {isLoading ? "Processing..." : "Buy Now"}
+            {isPaying ? "Processing..." : "Buy Now"}
           </button>
         </div>
 
