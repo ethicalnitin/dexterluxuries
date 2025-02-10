@@ -72,7 +72,8 @@ const ProductPage = () => {
     setError("");
 
     try {
-      const response = await fetch("https://dexterluxuries.onrender.com/create-order", {
+      console.log("buy now clicked");
+      const response = await fetch("https://dexterluxuries.onrender.com/api/payment/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: product.price, currency: "INR" }),
@@ -91,7 +92,7 @@ const ProductPage = () => {
         order_id: order.id,
         handler: async function (response) {
           try {
-            const verifyResponse = await fetch("https://dexterluxuries.onrender.com/verify-payment", {
+            const verifyResponse = await fetch("https://dexterluxuries.onrender.com/api/payment/verify-payment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -114,7 +115,7 @@ const ProductPage = () => {
       const razorpay = new window.Razorpay(options);
       razorpay.open();
     } catch (error) {
-      setError("⚠️ Error processing payment. Try again later.");
+      setError("⚠️ Error processing payment. Try later.");
       console.error(error);
     } finally {
       setIsPaying(false);
