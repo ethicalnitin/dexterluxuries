@@ -11,6 +11,8 @@ const { urlencoded } = require('body-parser');
 
 const app = express();
 
+const MONGO_URL = process.env.MONGO_URL;
+
 
 const PORT = process.env.PORT || 3040;
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
@@ -19,11 +21,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 
 mongoose
-  .connect("mongodb://localhost:27017/pdatadexter")
+  .connect(MONGO_URL)
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.log(err));
 
-
+  
 
     
 app.use('/api/payment', paymentRoutes);
