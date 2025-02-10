@@ -136,15 +136,16 @@ const ProductPage = () => {
   const countdownEnd = new Date(Date.now() + 3600000); // Set countdown for 1 hour from now
 
   return (
+    
     <div className="max-w-6xl mx-auto p-2 mt-2">
       <div className="grid md:grid-cols-2 gap-6">
         <div className="pt-20 justify-center">
           <h1 className="text-2xl font-bold mb-2">#1011 - {product.name}🔥</h1>
-          <img src={product.image} alt={product.name} className="pt-5 w-full md:w-3/4 rounded-lg shadow-lg" />
+          <img src={product.image} alt={product.name} className="pt-5 w-full md:w-3/4 rounded-lg " />
         </div>
 
         <div className="bg-gray-300 text-black p-3 rounded-lg mt-3">
-          <h2 className="text-sm font-bold mb-2">Only till stock lasts!⏳</h2>
+          
           <Countdown
             date={countdownEnd}
             renderer={({ hours, minutes, seconds }) => (
@@ -182,8 +183,8 @@ const ProductPage = () => {
           </button>
         </div>
 
-        <div className="flex flex-col justify-center">
-          <p className="text-black-700 text-lg mt-3" dangerouslySetInnerHTML={{ __html: product.description }} />
+        <div className="flex flex-col">
+          <p className="text-black-700 text-lg mt-1" dangerouslySetInnerHTML={{ __html: product.description }} />
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
       </div>
