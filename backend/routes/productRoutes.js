@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Product = require("../models/productData");
 const router = express.Router();
 
@@ -20,7 +21,6 @@ router.post("/add", async (req, res) => {
     }
 });
 
-
 // Get all products
 router.get("/", async (req, res) => {
     try {
@@ -33,20 +33,23 @@ router.get("/", async (req, res) => {
 
 // Get a single product by ID
 router.get("/:id", async (req, res) => {
+    const id = parseInt(req.params.id, 10); // Convert ID to a number
+
+    if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format. Expected a number." });
+    }
+
+    console.log("Received ID:", id);
+
     try {
-        const id = req.params.id; // Correct way to access id
-        console.log("Requested Product ID:", id);
-
-        // Use findOne if ID is not a MongoDB ObjectId
-        const product = await Product.findOne({ id: id });
-
+        const product = await Product.findOne({ id }); // Use `findOne` instead of `findById`
         if (!product) {
-            return res.status(404).json({ message: "Product not found" });
+            return res.status(404).json({ message: "Product not found." });
         }
-
         res.json(product);
     } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        console.error("Database error:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
 });
 
