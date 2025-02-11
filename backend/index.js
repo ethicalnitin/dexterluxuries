@@ -14,7 +14,7 @@ const app = express();
 const MONGO_URL = process.env.MONGO_URL;
 
 
-const PORT = process.env.PORT || 3040;
+const PORT = process.env.PORT || 3045;
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
 app.use(compression());
 app.use(bodyParser.urlencoded({ extended: true }));
