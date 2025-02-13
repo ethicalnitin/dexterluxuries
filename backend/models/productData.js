@@ -7,6 +7,7 @@ const productSchema = new mongoose.Schema(
         price: Number,
         strikeThroughPrice: Number,
         image: String,
+        downloadLink: String,
         description: String,
         
     }
