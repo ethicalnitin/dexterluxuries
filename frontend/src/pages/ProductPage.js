@@ -100,13 +100,15 @@ const ProductPage = () => {
         },
         handler: async function (response) {
           try {
-            const verifyResponse = await fetch("https://dexterluxuries.onrender.com/api/payment/verify-payment", {
+            const verifyResponse = await fetch("http://localhost:3046/api/payment/verify-payment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 razorpay_order_id: order.id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
+                userEmail: email,
+                productId: id,
               }),
             });
 
