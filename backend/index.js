@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require("mongoose");
+const path= require('path');
 const compression = require('compression');
 require('dotenv').config();
 const bodyParser= require('body-parser')
@@ -10,6 +11,7 @@ const Product = require("./models/productData"); // Import your Mongoose model
 const { urlencoded } = require('body-parser');
 
 const app = express();
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 const MONGO_URL = process.env.MONGO_URL;
 
@@ -30,6 +32,9 @@ mongoose
     
 app.use('/api/payment', paymentRoutes);
 app.use("/api/products", productRoutes);
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
 
 
 
