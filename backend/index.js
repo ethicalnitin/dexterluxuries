@@ -32,6 +32,12 @@ mongoose
     
 app.use('/api/payment', paymentRoutes);
 app.use("/api/products", productRoutes);
+app.use("/health", async (req,res)=>{
+    
+  console.log("Jag raha hu!");
+  res.status(200).json({message : "Jag raha hu!"});
+ 
+})
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });

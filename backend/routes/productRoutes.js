@@ -53,11 +53,10 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/health", async (req,res)=>{
-    
-    console.log("Jag raha hu!");
-    res.status(200).json({message : "Jag raha hu!"});
+router.get("/testwake", async (req, res) => {
+
+    res.status(500).json({ message :"Jag raha hu!"});
    
-})
+});
 
 module.exports = router;
