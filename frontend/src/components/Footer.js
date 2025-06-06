@@ -36,6 +36,11 @@ export const Footer = () => {
                   Privacy Policy
                 </Link>
               </li>
+              <li>
+                <Link to="/Proofs" className="text-gray-400 hover:text-white transition duration-200">
+                  Proofs and Vouches
+                </Link>
+              </li>
             </ul>
           </div>
 

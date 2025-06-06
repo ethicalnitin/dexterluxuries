@@ -37,7 +37,7 @@ const ProductPage = () => {
         const fetchProduct = async () => {
             try {
                 // Replace with your actual API endpoint if needed
-                const response = await fetch(`http://localhost:3046/api/products/${id}`);
+                const response = await fetch(`https://dexterluxuries.onrender.com/api/products/${id}`);
                 const data = await response.json();
 
                 if (!response.ok) {
