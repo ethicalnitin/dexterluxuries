@@ -25,7 +25,7 @@ const Navbar = () => {
   }, []);
 
   const handleTelegramClick = () => {
-    window.open("https://t.me/YOUR_TELEGRAM_USERNAME", "_blank");
+    window.open("https://t.me/cybermafia.shop", "_blank");
   };
 
   return (
@@ -40,7 +40,7 @@ const Navbar = () => {
             className="w-10 h-10 md:w-12 md:h-12 rounded-full"
           />
           <h1 className="text-lg md:text-xl font-bold text-black uppercase tracking-wide">
-            Dexter Luxuries
+            CyberMafia.Shop
           </h1>
         </Link>
       </div>

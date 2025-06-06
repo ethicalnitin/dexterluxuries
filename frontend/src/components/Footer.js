@@ -9,7 +9,7 @@ export const Footer = () => {
         <div className="flex flex-wrap justify-between items-center">
           {/* Left Section */}
           <div className="w-full sm:w-1/3 text-center sm:text-left mb-4 sm:mb-0">
-            <p className="text-lg font-semibold">&copy; 2024 Dexter Luxuries</p>
+            <p className="text-lg font-semibold">&copy; 2021 CyberMafia.Shop</p>
             <p className="text-sm">All Rights Reserved</p>
           </div>
 
@@ -57,11 +57,7 @@ export const Footer = () => {
                   <i className="fab fa-twitter fa-lg"></i>
                 </a>
               </li>
-              <li>
-                <a href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition duration-200">
-                  <i className="fab fa-linkedin fa-lg"></i>
-                </a>
-              </li>
+             
             </ul>
           </div>
         </div>
