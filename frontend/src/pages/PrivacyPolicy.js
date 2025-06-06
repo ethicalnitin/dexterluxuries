@@ -5,7 +5,7 @@ const PrivacyPolicy = () => {
     <div className="container mx-auto p-6 mt-16">
       <h1 className="text-3xl font-bold">Privacy Policy</h1>
       <p className="text-gray-700 mt-4">
-        At Dexter Luxuries, we value your privacy and are committed to protecting the personal information you share with us. This Privacy Policy outlines how we collect, use, store, and safeguard your data when you visit our website or make a purchase from our digital product store.
+        At CyberMafia.Shop, we value your privacy and are committed to protecting the personal information you share with us. This Privacy Policy outlines how we collect, use, store, and safeguard your data when you visit our website or make a purchase from our digital product store.
       </p>
 
       <h3 className="text-2xl font-semibold mt-6">Information We Collect</h3>
@@ -73,7 +73,7 @@ const PrivacyPolicy = () => {
       </p>
 
       <p className="text-gray-700 mt-6">
-        Thank you for trusting Dexter Luxuries. We are committed to safeguarding your privacy and ensuring a safe and secure experience when using our website and purchasing digital products.
+        Thank you for trusting CyberMafia.Shop. We are committed to safeguarding your privacy and ensuring a safe and secure experience when using our website and purchasing digital products.
       </p>
     </div>
   );

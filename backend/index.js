@@ -6,7 +6,7 @@ const compression = require('compression');
 require('dotenv').config();
 const bodyParser= require('body-parser')
 const productRoutes = require("./routes/productRoutes");
-const paymentRoutes = require('./routes/paymentRoutes');
+ 
 const Product = require("./models/productData"); // Import your Mongoose model
 const { urlencoded } = require('body-parser');
 
@@ -30,7 +30,7 @@ mongoose
   
 
     
-app.use('/api/payment', paymentRoutes);
+ 
 app.use("/api/products", productRoutes);
 app.use("/health", async (req,res)=>{
     
