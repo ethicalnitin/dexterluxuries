@@ -7,17 +7,7 @@ import './Homepage.css'; // Keep the custom CSS for the marquee animation
 const HomePage = () => {
   const [products, setProducts] = useState([]);
 
-  // Simulated purchase data for popups
-  const simulatedPurchases = [
-    { item: "Designer Watch", user: "User A" },
-    { item: "Leather Handbag", user: "User B" },
-    { item: "Exotic Perfume", user: "User C" },
-    { item: "Diamond Ring", user: "User D" },
-    { item: "Silk Scarf", user: "User E" },
-    { item: "Luxury Pen", user: "User F" },
-    { item: "Crystal Vase", user: "User G" },
-    { item: "Cashmere Sweater", user: "User H" },
-  ];
+  
 
   // Trust-building images/logos (replace with actual image URLs)
   const trustBadges = [
@@ -41,32 +31,11 @@ const HomePage = () => {
       .then((data) => setProducts(data))
       .catch((error) => console.error("Error fetching products:", error));
 
-    // Simulate purchase notifications
-    const interval = setInterval(() => {
-      const randomPurchase = simulatedPurchases[Math.floor(Math.random() * simulatedPurchases.length)];
-      toast.info(`${randomPurchase.user} just purchased a ${randomPurchase.item}!`, {
-        position: "bottom-left",
-        autoClose: 3000, // Close after 3 seconds
-        hideProgressBar: true,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        style: { // Optional: Add some basic styling to the toast
-          background: '#f0f0f0',
-          color: '#333',
-          fontSize: '14px'
-        }
-      });
-    }, 5000); // Trigger every 5 seconds
-
-    // Cleanup the interval on component unmount
-    return () => clearInterval(interval);
 
   }, []);
 
   return (
-    // Changed background to white and removed dark mode background class
+   
     <div className="min-h-screen bg-white text-gray-900">
 
       {/* Announcement Bar - Scrolling Marquee */}
