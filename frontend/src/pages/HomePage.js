@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import './Homepage.css'; // Keep the custom CSS for the marquee animation
 
 const HomePage = () => {
@@ -104,8 +102,7 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Toast Container for Notifications */}
-      <ToastContainer />
+      
     </div>
   );
 };
