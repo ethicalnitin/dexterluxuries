@@ -3,10 +3,9 @@ const mongoose = require("mongoose");
 const Product = require("../models/productData");
 const router = express.Router();
 
-// Add a new product
 router.post("/add", async (req, res) => {
     try {
-        const product = req.body; // Single product object
+        const product = req.body; 
         
         if (!product || typeof product !== "object") {
             return res.status(400).json({ error: "Invalid data format, expected a product object." });
@@ -21,7 +20,7 @@ router.post("/add", async (req, res) => {
     }
 });
 
-// Get all products
+
 router.get("/", async (req, res) => {
     try {
         const products = await Product.find();
@@ -31,9 +30,9 @@ router.get("/", async (req, res) => {
     }
 });
 
-// Get a single product by ID
+
 router.get("/:id", async (req, res) => {
-    const id = parseInt(req.params.id, 10); // Convert ID to a number
+    const id = parseInt(req.params.id, 10); 
 
     if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format. Expected a number." });
@@ -42,7 +41,7 @@ router.get("/:id", async (req, res) => {
     console.log("Received ID:", id);
 
     try {
-        const product = await Product.findOne({ id }); // Use `findOne` instead of `findById`
+        const product = await Product.findOne({ id }); 
         if (!product) {
             return res.status(404).json({ message: "Product not found." });
         }
