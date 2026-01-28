@@ -4,9 +4,7 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import './Proofs.css';
 
-// --- Static Data for Proofs Page ---
-// These reviews are generalized for Dexter Luxuries as a whole,
-// showcasing trust in your digital products/services.
+
 const proofsPageReviews = [
   { id: 1, name: "Arjun S.", review: "Dexter Luxuries delivers! Their subscriptions are top-notch and always reliable." },
   { id: 2, name: "Bhavna P.", review: "I've tried their trading bots, and the results are consistently impressive. Highly recommend their digital tools!" },
@@ -16,25 +14,25 @@ const proofsPageReviews = [
 ];
 
 const Proofs = () => {
-  // Static URL for your proofs
+  
   const proofsDriveUrl = "https://shorturl.at/r2Fvv";
 
-  // --- Effects ---
+  
   useEffect(() => {
-    window.scrollTo(0, 0); // Scroll to top on component mount
+    window.scrollTo(0, 0); 
   }, []);
 
-  // --- Carousel Settings (similar to your ProductPage) ---
+
   const carouselSettings = {
-    dots: true, // Show dots for navigation
+    dots: true, 
     infinite: true,
     speed: 1000,
-    slidesToShow: 1, // Show one review at a time
+    slidesToShow: 1, 
     slidesToScroll: 1,
     autoplay: true,
-    autoplaySpeed: 5000, // Slightly longer for reviews
-    arrows: false, // No arrows, rely on dots or swipe
-    responsive: [ // Responsive settings for different screen sizes
+    autoplaySpeed: 5000, 
+    arrows: false,
+    responsive: [ 
       {
         breakpoint: 768,
         settings: {
@@ -47,7 +45,7 @@ const Proofs = () => {
 
   return (
     <div className="proofs-page-container py-10 pt-15">
-      {/* Hero Section */}
+      
       <div className="proofs-hero py-25">
         <h1 className="proofs-hero-title">Experience the Dexter Luxuries Difference.</h1>
         <p className="proofs-hero-subtitle">
@@ -55,7 +53,7 @@ const Proofs = () => {
         </p>
       </div>
 
-      {/* Main Content: Proofs Link & Description */}
+     
       <div className="proofs-main-content">
         <div className="proofs-grid-section">
           <div className="proofs-text-content">
@@ -70,7 +68,7 @@ const Proofs = () => {
               of results, screenshots, and verifiable outcomes from our satisfied clients. This transparency is our commitment to you.
             </p>
 
-            {/* Direct Link to Proofs */}
+            
             <div className="proofs-action-area">
               <a
                 href={proofsDriveUrl}
@@ -91,7 +89,7 @@ const Proofs = () => {
         </div>
       </div>
 
-      {/* Customer Reviews Section */}
+      
       <div className="proofs-reviews-section">
         <h2 className="proofs-section-title">What Our Clients Say About Dexter Luxuries 🤝</h2>
         <Slider {...carouselSettings}>
@@ -104,7 +102,6 @@ const Proofs = () => {
         </Slider>
       </div>
 
-      {/* Call to Action Section */}
       <div className="proofs-cta-section">
         <h2 className="proofs-cta-title">Ready to Experience Dexter Luxuries?</h2>
         <p className="proofs-cta-subtitle">
