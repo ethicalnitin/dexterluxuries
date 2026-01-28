@@ -6,9 +6,9 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Navbar from "./components/Navbar";
 import { Footer } from "./components/Footer";
-import RefundPolicy from './pages/RefundPolicy';  // Import the Refund Policy page
-import PrivacyPolicy from './pages/PrivacyPolicy';  // Import the Privacy Policy page
-import Proofs from './pages/Proofs';  // Import the Privacy Policy page
+import RefundPolicy from './pages/RefundPolicy';  
+import PrivacyPolicy from './pages/PrivacyPolicy'; 
+import Proofs from './pages/Proofs'; 
 
 
 import './index.css';
