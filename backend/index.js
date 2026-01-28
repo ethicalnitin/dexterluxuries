@@ -7,7 +7,7 @@ require('dotenv').config();
 const bodyParser= require('body-parser')
 const productRoutes = require("./routes/productRoutes");
  
-const Product = require("./models/productData"); // Import your Mongoose model
+const Product = require("./models/productData"); 
 const { urlencoded } = require('body-parser');
 
 const app = express();
