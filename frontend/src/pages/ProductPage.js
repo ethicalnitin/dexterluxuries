@@ -70,7 +70,7 @@ const ProductPage = () => {
         
         const encodedProductName = encodeURIComponent(product.name || 'Product');
 
-        const paymentUrl = `https://payment.cybermafia.shop?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
+        const paymentUrl = `https://paymentpage-html.onrender.com?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
 
         console.log("Navigating to:", paymentUrl);
         window.location.href = paymentUrl;
