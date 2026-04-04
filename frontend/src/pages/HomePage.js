@@ -32,7 +32,7 @@ const HomePage = () => {
   ];
 
   useEffect(() => {
-    fetch("https://dexterluxuries-1.onrender.com/api/products/")
+    fetch("https://dexterluxuries.onrender.com/api/products/")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
