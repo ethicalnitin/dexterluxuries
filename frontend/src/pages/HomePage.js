@@ -1,98 +1,182 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import './Homepage.css'; 
+import "./Homepage.css";
 
 const HomePage = () => {
   const [products, setProducts] = useState([]);
+  const [current, setCurrent] = useState(0);
 
- 
   const trustBadges = [
-    { src: "https://i.ibb.co/Xf3yCrN4/image.png", alt: "Secure Payment" }, 
+    { src: "https://i.ibb.co/Xf3yCrN4/image.png", alt: "Secure Payment" },
     { src: "https://i.ibb.co/x8j8N7Pr/image.png", alt: "SSL Certified" },
     { src: "https://i.ibb.co/wNJpGYyz/image.png", alt: "Fast Shipping" },
-    { src: "https://i.ibb.co/T9ddrcV/image.png", alt: "24/7 Customer Support" }, 
+    { src: "https://i.ibb.co/T9ddrcV/image.png", alt: "24/7 Customer Support" },
   ];
 
+  const slides = [
+    {
+      title: "",
+      desc: "",
+      img: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+    },
+    {
+      title: "",
+      desc: "",
+      img: "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
+    },
+    {
+      title: "",
+      desc: "",
+      img: "https://images.unsplash.com/photo-1556740749-887f6717d7e4",
+    },
+  ];
 
   useEffect(() => {
-    
-    fetch("https://dexterluxuries.onrender.com/api/products/")
+    fetch("http://localhost:3046/api/products/")
       .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
       .then((data) => setProducts(data))
       .catch((error) => console.error("Error fetching products:", error));
-
-
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % slides.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
   return (
-   
-    <div className="min-h-screen bg-white text-gray-900">
-      <div className="w-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white py-2 text-sm font-semibold overflow-hidden">
-        <div className="marquee"> {/* Custom CSS class for scrolling */}
-          <span>📣 More than 80% off on digital products! Shop Now! 🛒 ✨ Limited Time Offer! ✨ Free Shipping on Orders over $100! 🚚</span>
+    <div className="hp-root">
+      {/* Announcement bar */}
+      <div className="hp-announce-bar">
+        <div className="marquee">
+          <span>
+            📣 More than 80% off on digital products!&nbsp;&nbsp;🛒&nbsp;&nbsp;✨
+            Limited Time Offer!&nbsp;&nbsp;✨&nbsp;&nbsp;Free Shipping on Orders
+            over $100!&nbsp;&nbsp;🚚&nbsp;&nbsp;Instant Digital Delivery on all
+            products!&nbsp;&nbsp;⚡
+          </span>
         </div>
       </div>
 
-      <div className="w-full max-w-screen-xl mx-auto px-4 py-6"> 
-
-        <div className="flex flex-col items-center gap-6 my-8">
-          <h3 className="text-xl font-semibold text-center mb-4 text-gray-800">Shop with Confidence</h3> {/* Adjusted text color for light background */}
-          {trustBadges.map((badge, index) => (
-            <img
+      {/* Hero Slider */}
+      <section className="hp-hero">
+        <div className="hp-slides">
+          {slides.map((slide, index) => (
+            <div
               key={index}
-              src={badge.src}
-              alt={badge.alt}
-              className="h-14 object-contain filter drop-shadow-md"
-            />
+              className={`hp-slide ${index === current ? "hp-slide--active" : ""}`}
+            >
+              <img src={slide.img} alt="banner" className="hp-slide-img" />
+              <div className="hp-slide-overlay" />
+            </div>
           ))}
         </div>
 
-        
-        <div className="text-center text-green-600 font-bold text-lg mb-8 animate-pulse">
-          🎉 Join 100+ active users exploring our luxurious collection! 🎉
+        {/* Hero text overlay */}
+        <div className="hp-hero-content">
+          <p className="hp-hero-eyebrow">✦ Premium Digital Store ✦</p>
+          <h1 className="hp-hero-title">
+            Unlock <span className="hp-hero-accent">Digital</span> Excellence
+          </h1>
+          <p className="hp-hero-sub">
+            Top-tier digital products at unbeatable prices
+          </p>
+          <a href="#products" className="hp-hero-cta">
+            Shop Now <span>→</span>
+          </a>
         </div>
 
-      
-        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-8 text-gray-800">
-          Featured Products🔥
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+        {/* Dots */}
+        <div className="hp-dots">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrent(i)}
+              className={`hp-dot ${current === i ? "hp-dot--active" : ""}`}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Trust badges */}
+      <section className="hp-trust">
+        <p className="hp-trust-label">Shop with Confidence</p>
+        <div className="hp-trust-grid">
+          {trustBadges.map((badge, index) => (
+            <div key={index} className="hp-trust-item">
+              <img src={badge.src} alt={badge.alt} className="hp-trust-img" />
+              <span className="hp-trust-text">{badge.alt}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Social proof banner */}
+      <div className="hp-social-proof">
+        <span className="hp-social-proof-dot" />
+        🎉Join <strong>100+</strong> active users exploring our luxurious
+        collection!&nbsp;&nbsp;New products added weekly!
+        <span className="hp-social-proof-dot" />
+      </div>
+
+      {/* Products */}
+      <section className="hp-products" id="products">
+        <div className="hp-section-header">
+          <h2 className="hp-section-title">
+            Featured Products <span>🔥</span>
+          </h2>
+          <p className="hp-section-sub">
+            Handpicked digital gems — instant download, lifetime access
+          </p>
+        </div>
+
+        <div className="hp-grid">
           {products.map((product) => (
-            <div key={product.id} className="border border-gray-200 p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 relative bg-white"> 
-              <Link to={`/product/${product.id}`} className="block">
+            <div key={product.id} className="hp-card">
+              <Link to={`/product/${product.id}`} className="hp-card-img-wrap">
                 <img
                   src={product.image}
                   alt={product.name}
-                  className="w-full h-64 object-contain rounded-lg mb-4 transform hover:scale-105 transition-transform duration-300"
+                  className="hp-card-img"
                 />
-               
-                <h3 className="text-lg md:text-xl font-semibold text-gray-900">{product.name}</h3>
+                <div className="hp-card-badge">Digital</div>
               </Link>
 
-              
-              <p className="text-gray-700 text-sm md:text-base mt-2">
-                <span className="font-bold text-black">₹{product.price}</span>
-                <span className="line-through text-gray-500 ml-2">₹{product.strikeThroughPrice}</span>
-              </p>
-
-              <div className="flex justify-end mt-4">
+              <div className="hp-card-body">
                 <Link to={`/product/${product.id}`}>
-                  <button className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-                    View Details
-                  </button>
+                  <h3 className="hp-card-name">{product.name}</h3>
+                </Link>
+
+                <div className="hp-card-pricing">
+                  <span className="hp-card-price">₹{product.price}</span>
+                  <span className="hp-card-strike">
+                    ₹{product.strikeThroughPrice}
+                  </span>
+                  {product.strikeThroughPrice && (
+                    <span className="hp-card-discount">
+                      {Math.round(
+                        ((product.strikeThroughPrice - product.price) /
+                          product.strikeThroughPrice) *
+                          100
+                      )}
+                      % off
+                    </span>
+                  )}
+                </div>
+
+                <Link to={`/product/${product.id}`} className="hp-card-btn">
+                  View Details <span>→</span>
                 </Link>
               </div>
             </div>
           ))}
         </div>
-      </div>
-
-      
+      </section>
     </div>
   );
 };
