@@ -1,0 +1,409 @@
+/* ─── ProductPage.css ───────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --gold:        #c9a84c;
+  --gold-light:  #e8c97a;
+  --gold-dark:   #a07830;
+  --ink:         #0d0d0d;
+  --ink-soft:    #1a1a2e;
+  --surface:     #f7f4ef;
+  --card-bg:     #ffffff;
+  --text-muted:  #6b6b6b;
+  --green:       #16a34a;
+  --green-bg:    #dcfce7;
+  --red:         #dc2626;
+  --font-display:'Playfair Display', Georgia, serif;
+  --font-body:   'DM Sans', 'Segoe UI', sans-serif;
+  --radius:      16px;
+  --shadow:      0 4px 32px rgba(0,0,0,0.09);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.pp-root {
+  min-height: 100vh;
+  background: var(--surface);
+  font-family: var(--font-body);
+  color: var(--ink);
+  padding-top: 72px; /* offset fixed navbar */
+}
+
+/* ─── Loading ───────────────────────────────────────────────────────── */
+.pp-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  gap: 1.2rem;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.pp-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(201,168,76,0.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: pp-spin 0.8s linear infinite;
+}
+
+@keyframes pp-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Error ─────────────────────────────────────────────────────────── */
+.pp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  gap: 1rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.pp-error-icon { font-size: 3rem; }
+.pp-error p    { font-size: 1.1rem; color: var(--red); }
+
+/* ─── Main grid ─────────────────────────────────────────────────────── */
+.pp-grid {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .pp-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 3.5rem;
+    align-items: start;
+  }
+}
+
+/* ─── Image column ──────────────────────────────────────────────────── */
+.pp-image-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.pp-image-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.pp-product-img {
+  width: 100%;
+  display: block;
+  object-fit: contain;
+  padding: 1.5rem;
+  max-height: 400px;
+}
+
+.pp-discount-badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 50px;
+}
+
+.pp-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.pp-trust-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: var(--card-bg);
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 5px 14px;
+  border-radius: 50px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ─── Detail column ─────────────────────────────────────────────────── */
+.pp-detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.pp-eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold-dark);
+  font-weight: 600;
+}
+
+.pp-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+/* ─── Countdown ─────────────────────────────────────────────────────── */
+.pp-countdown-card {
+  background: var(--ink);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.4rem;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-self: flex-start;
+}
+
+.pp-countdown-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  font-weight: 500;
+}
+
+.pp-countdown-display {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pp-time-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  min-width: 54px;
+}
+
+.pp-time-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-time-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.45);
+  margin-top: 2px;
+}
+
+.pp-colon {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gold);
+  padding-bottom: 6px;
+}
+
+.pp-expired {
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* ─── Pricing ───────────────────────────────────────────────────────── */
+.pp-pricing {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.pp-price-current {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ink);
+  font-family: var(--font-display);
+}
+
+.pp-price-strike {
+  font-size: 1.1rem;
+  color: #aaa;
+  text-decoration: line-through;
+}
+
+.pp-price-save {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-bg);
+  padding: 3px 10px;
+  border-radius: 50px;
+}
+
+/* ─── Buy button ────────────────────────────────────────────────────── */
+.pp-buy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.95rem 2rem;
+  border-radius: 50px;
+  cursor: pointer;
+  width: 100%;
+  max-width: 360px;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 6px 24px rgba(201,168,76,0.38);
+}
+
+.pp-buy-btn:hover {
+  background: var(--gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(201,168,76,0.45);
+}
+
+.pp-btn-arrow {
+  font-size: 1.1rem;
+}
+
+.pp-cta-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  max-width: 360px;
+}
+
+/* ─── Description ───────────────────────────────────────────────────── */
+.pp-description {
+  background: var(--card-bg);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.5rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+
+.pp-desc-heading {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+}
+
+.pp-desc-body {
+  font-size: 0.92rem;
+  color: #444;
+  line-height: 1.7;
+}
+
+.pp-desc-body ul  { padding-left: 1.2rem; }
+.pp-desc-body li  { margin-bottom: 0.35rem; }
+.pp-desc-body p   { margin-bottom: 0.6rem; }
+.pp-desc-body strong { color: var(--ink); }
+
+.pp-inline-error {
+  color: var(--red);
+  font-size: 0.85rem;
+}
+
+/* ─── Reviews section ───────────────────────────────────────────────── */
+.pp-reviews {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 4rem;
+}
+
+.pp-reviews-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 2rem;
+  color: var(--ink);
+}
+
+.pp-reviews-slider { padding-bottom: 1rem; }
+
+.pp-review-slide { padding: 0 0.5rem; }
+
+.pp-review-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: var(--radius);
+  padding: 2rem 1.75rem;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.pp-review-stars {
+  color: var(--gold);
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.9rem;
+}
+
+.pp-review-text {
+  font-size: 1rem;
+  color: #444;
+  font-style: italic;
+  line-height: 1.65;
+  margin-bottom: 1rem;
+}
+
+.pp-review-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+}
+
+/* Slick dots override */
+.pp-reviews-slider .slick-dots li button:before {
+  color: var(--gold);
+  opacity: 0.35;
+  font-size: 8px;
+}
+.pp-reviews-slider .slick-dots li.slick-active button:before {
+  color: var(--gold);
+  opacity: 1;
+}
+
+/* ─── Mobile tweaks ─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .pp-countdown-card { align-self: stretch; }
+  .pp-buy-btn        { max-width: 100%; }
+  .pp-cta-note       { max-width: 100%; }
+  .pp-time-num       { font-size: 1.3rem; }
+  .pp-time-block     { min-width: 44px; padding: 0.35rem 0.5rem; }
+}
