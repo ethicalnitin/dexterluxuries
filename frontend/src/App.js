@@ -9,6 +9,7 @@ import { Footer } from "./components/Footer";
 import RefundPolicy from './pages/RefundPolicy';  
 import PrivacyPolicy from './pages/PrivacyPolicy'; 
 import Proofs from './pages/Proofs'; 
+import WhatsappButton from "./components/WhatsappButton";
 
 
 import './index.css';
@@ -31,6 +32,7 @@ function App(){
           <Route path="/proofs" element={<Proofs />} />
         </Routes>
         <Footer />
+        <WhatsappButton />
       </Router>
       
     );
