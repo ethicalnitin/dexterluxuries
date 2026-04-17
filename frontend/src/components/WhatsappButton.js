@@ -167,7 +167,7 @@ const style = `
 `;
 
 const WhatsappButton = () => {
-  const phoneNumber = '919876543210'; // 🔴 Replace with your number (with country code, no +)
+  const phoneNumber = '919259317696'; // 🔴 Replace with your number (with country code, no +)
   const message = 'Hello! I am interested in your TradingView Premium plans. Can you share more details?';
 
   const handleClick = () => {
