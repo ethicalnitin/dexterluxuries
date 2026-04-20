@@ -13,6 +13,8 @@ import WhatsappButton from "./components/WhatsappButton";
 
 
 import './index.css';
+import AdminPage from "./pages/AdminPage";
+import OrdersPage from "./pages/OrdersPage";
 
 function App(){
 
@@ -30,6 +32,8 @@ function App(){
           <Route path="/refund-policy" element={<RefundPolicy />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/proofs" element={<Proofs />} />
+          <Route path="/filedelivery" element={<AdminPage />} />
+          <Route path="/orderpage" element={<OrdersPage />} />
         </Routes>
         <Footer />
         <WhatsappButton />
