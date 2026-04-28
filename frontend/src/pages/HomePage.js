@@ -463,7 +463,7 @@ const HomePage = () => {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
-    fetch("https://dexterluxuries-backend-6ptn.onrender.com/api/products/")
+    fetch("https://dexterluxuries-backend-6ptn.onrender.com/api/products")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
