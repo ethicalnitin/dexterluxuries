@@ -212,7 +212,7 @@ const Navbar = () => {
   }, [isOpen]);
 
   const handleTelegramClick = () => {
-    window.open("https://t.me/cybermafia.shop", "_blank");
+    window.open("https://t.me/dexterluxuries", "_blank");
     setIsOpen(false);
   };
 
