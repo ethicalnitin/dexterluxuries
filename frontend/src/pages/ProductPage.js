@@ -489,6 +489,11 @@ const reviews = [
   { id: 4, name: "Priya Das", city: "Bangalore", review: "Best purchase I've made for my trading setup. Full premium access, no limits. Absolutely worth every rupee." },
 ];
 
+// ── IMPORTANT: Set this to your React app's payment page route ────────────────
+// If PaymentPage is hosted at the root of your app (e.g. yourapp.com/payment),
+// change this to your actual deployed URL or use a relative path like "/payment"
+const PAYMENT_PAGE_BASE_URL = process.env.REACT_APP_PAYMENT_URL || "/payment";
+
 const ProductPage = () => {
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -528,7 +533,9 @@ const ProductPage = () => {
       return;
     }
     const encodedProductName = encodeURIComponent(product.name || "Product");
-    const paymentUrl = `https://paymentpage-html.onrender.com?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
+
+    // ── Redirects to YOUR React PaymentPage with amount, productId, productName ──
+    const paymentUrl = `${PAYMENT_PAGE_BASE_URL}?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
     window.location.href = paymentUrl;
   };
 

@@ -26,9 +26,8 @@ async function getBrowser() {
     console.log("[Lotus365] Launching browser...");
     browserInstance = await puppeteer.launch({
       headless: false,
+      slowMo: 50,
       devtools: false,
-      slowMo: 30,
-      defaultViewport: null,
       args: [
         "--start-maximized",
         "--no-sandbox",
