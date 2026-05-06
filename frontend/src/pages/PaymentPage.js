@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { FiRefreshCw, FiUpload, FiCheckCircle, FiCopy, FiSend, FiAlertCircle, FiMessageCircle } from "react-icons/fi";
+import { FiRefreshCw, FiUpload, FiCheckCircle, FiCopy, FiSend, FiAlertCircle } from "react-icons/fi";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const API_BASE = "http://localhost:3046/api";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3046/api";
 
-// ── ★ YOUR DIRECT PAY QR — replace this URL with your own QR image link ──────
+// ── YOUR DIRECT PAY QR — replace this URL with your own QR image link ─────────
 const DIRECT_PAY_QR = "https://YOUR_QR_IMAGE_URL_HERE.png";
 
-// ── WhatsApp support number ───────────────────────────────────────────────────
+// ── WhatsApp support number ────────────────────────────────────────────────────
 const WHATSAPP_NUMBER = "916205147078";
 
-// ── Static "Pay to Seller" tab that is always present ────────────────────────
+// ── Static "Pay to Seller" tab that is always present ─────────────────────────
 const DIRECT_TAB = {
-  _isDirectTab: true,        // flag so we can identify it anywhere
+  _isDirectTab: true,
   method:       "direct",
   label:        "Pay to Seller",
-  name:         null,        // no name row shown
-  upiId:        null,        // no UPI ID row shown
+  name:         null,
+  upiId:        null,
   minAmount:    null,
   maxAmount:    null,
   qrBase64:     DIRECT_PAY_QR,
 };
 
-// ── Method metadata (icons/colors by method type) ─────────────────────────────
+// ── Method metadata ────────────────────────────────────────────────────────────
 const METHOD_META = {
   gpay:    { icon: "https://mahesh247.win/images/icon/gpay.png",    color: "#4285F4", label: "GPay" },
   phonepe: { icon: "https://mahesh247.win/images/icon/phonepe.png", color: "#5f259f", label: "PhonePe" },
@@ -32,16 +32,24 @@ const METHOD_META = {
   direct:  { icon: null,                                             color: "#C9A84C", label: "Pay to Seller" },
 };
 
-// ── Build unique tab labels ───────────────────────────────────────────────────
+// ── FIX: Parse params from the HASH portion of the URL ────────────────────────
+// HashRouter puts everything after #, e.g.: /#/payment?amount=999&productId=1
+// window.location.search is EMPTY with HashRouter — we must parse the hash.
+function getHashParams() {
+  const hash = window.location.hash; // e.g. "#/payment?amount=999&productId=1"
+  const queryStart = hash.indexOf("?");
+  if (queryStart === -1) return new URLSearchParams("");
+  return new URLSearchParams(hash.slice(queryStart + 1));
+}
+
+// ── Build unique tab labels ────────────────────────────────────────────────────
 function buildTabLabels(methods) {
   const typeCounts = {};
   methods.forEach((m) => { typeCounts[m.method] = (typeCounts[m.method] || 0) + 1; });
 
   const typeSeenSoFar = {};
   return methods.map((m) => {
-    // Direct tab always uses its fixed label
     if (m._isDirectTab) return "Pay to Seller (Direct)";
-
     const baseMeta  = METHOD_META[m.method];
     const baseLabel = baseMeta?.label || m.label || m.method?.toUpperCase() || "PAY";
 
@@ -55,7 +63,7 @@ function buildTabLabels(methods) {
   });
 }
 
-// ── Countdown timer hook ──────────────────────────────────────────────────────
+// ── Countdown timer hook ───────────────────────────────────────────────────────
 function useCountdown(targetMs) {
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
@@ -70,7 +78,7 @@ function useCountdown(targetMs) {
   return { mins, secs, remaining };
 }
 
-// ── QR Refresh Timer ──────────────────────────────────────────────────────────
+// ── QR Refresh Timer ───────────────────────────────────────────────────────────
 function QRTimer({ nextRefreshAt }) {
   const totalMs = 20 * 60 * 1000;
   const { mins, secs, remaining } = useCountdown(nextRefreshAt);
@@ -95,7 +103,7 @@ function QRTimer({ nextRefreshAt }) {
   );
 }
 
-// ── Copy button ───────────────────────────────────────────────────────────────
+// ── Copy button ────────────────────────────────────────────────────────────────
 function CopyBtn({ text, label }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -113,11 +121,12 @@ function CopyBtn({ text, label }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function PaymentPage() {
 
+  // ── FIX: Read params from hash (HashRouter compatible) ──────────────────────
   const urlParams = useMemo(() => {
-    const params  = new URLSearchParams(window.location.search);
+    const params = getHashParams();
     const rawAmt  = params.get("amount")      || "";
     const rawId   = params.get("productId")   || "";
     const rawName = params.get("productName") || "";
@@ -133,7 +142,9 @@ export default function PaymentPage() {
 
   const [utr,    setUtr]    = useState("");
   const [email,  setEmail]  = useState("");
-  const [amount, setAmount] = useState(() => new URLSearchParams(window.location.search).get("amount") || "");
+
+  // ── FIX: Amount always comes from URL params (locked). If not in URL, fetch from product ──
+  const [amount, setAmount] = useState(urlParams.amount || "");
 
   const [screenshot,        setScreenshot]        = useState(null);
   const [screenshotPreview, setScreenshotPreview] = useState(null);
@@ -143,7 +154,25 @@ export default function PaymentPage() {
   const fileInputRef = useRef(null);
   const pollRef      = useRef(null);
 
-  // ── Fetch QR — append DIRECT_TAB at end of every methods array ───────────
+  // ── If amount not in URL but productId is, fetch from product ───────────────
+  useEffect(() => {
+    if (!urlParams.amount && urlParams.productId) {
+      const fetchProduct = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/products/${urlParams.productId}`);
+          const data = await res.json();
+          if (res.ok && data.price) {
+            setAmount(data.price.toString());
+          }
+        } catch (err) {
+          console.error("Failed to fetch product price:", err);
+        }
+      };
+      fetchProduct();
+    }
+  }, [urlParams.amount, urlParams.productId]);
+
+  // ── Fetch QR ─────────────────────────────────────────────────────────────────
   const fetchQR = useCallback(async () => {
     try {
       setQrError(null);
@@ -152,7 +181,6 @@ export default function PaymentPage() {
       if (data.error)   throw new Error(data.error);
       if (data.loading) { setTimeout(fetchQR, 5000); return; }
 
-      // ★ Always inject the Direct tab as the last tab
       const enriched = {
         ...data,
         methods: [...(data.methods || []), DIRECT_TAB],
@@ -161,7 +189,6 @@ export default function PaymentPage() {
       setQrLoading(false);
       setSelectedIdx(0);
     } catch (err) {
-      // Even on error, still show Direct tab so user is never stuck
       setQrData({ methods: [DIRECT_TAB] });
       setQrError(err.message);
       setQrLoading(false);
@@ -216,8 +243,12 @@ export default function PaymentPage() {
   }
 
   function reset() {
-    setUtr(""); setEmail(""); setAmount(new URLSearchParams(window.location.search).get("amount") || "");
-    setScreenshot(null); setScreenshotPreview(null); setSubmitted(false);
+    setUtr("");
+    setEmail("");
+    setAmount(urlParams.amount || "");
+    setScreenshot(null);
+    setScreenshotPreview(null);
+    setSubmitted(false);
   }
 
   function openWhatsApp() {
@@ -227,7 +258,11 @@ export default function PaymentPage() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   }
 
-  // ── CSS ───────────────────────────────────────────────────────────────────
+  // ── Whether the amount field should be read-only ─────────────────────────────
+  // Amount is locked if it came from URL params OR was fetched from product
+  const amountLocked = !!(urlParams.amount || (urlParams.productId && amount));
+
+  // ── CSS ────────────────────────────────────────────────────────────────────
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -250,12 +285,10 @@ export default function PaymentPage() {
     .dl-fade-up { animation:fadeUp .45s ease forwards; }
     .dl-shimmer { background:linear-gradient(90deg,#1a1a1a 25%,#252525 50%,#1a1a1a 75%); background-size:200% auto; animation:shimmer 1.5s infinite linear; }
 
-    /* Regular payment method tabs */
     .dl-tab-on  { background:rgba(201,168,76,.1)!important; border-color:var(--gold)!important;  color:var(--gold)!important; }
     .dl-tab-off { background:var(--dark2)!important;        border-color:#1e1e1e!important;       color:#4a4a4a!important; }
     .dl-tab-off:hover { border-color:rgba(201,168,76,.3)!important; color:var(--ivory-dim)!important; }
 
-    /* ★ Direct / Pay-to-Seller tab has a distinct gold style */
     .dl-tab-direct-on  { background:rgba(201,168,76,.15)!important; border-color:var(--gold)!important; color:var(--gold)!important; }
     .dl-tab-direct-off { background:rgba(201,168,76,.04)!important; border-color:rgba(201,168,76,.25)!important; color:rgba(201,168,76,.55)!important; }
     .dl-tab-direct-off:hover { border-color:var(--gold)!important; color:var(--gold)!important; background:rgba(201,168,76,.1)!important; }
@@ -272,7 +305,6 @@ export default function PaymentPage() {
     .dl-btn:active:not(:disabled) { transform:translateY(0); }
     .dl-btn:disabled { opacity:.4; cursor:not-allowed; }
 
-    /* ★ WhatsApp error button */
     .dl-wa-btn {
       width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
       background:rgba(37,211,102,.08); border:1px solid rgba(37,211,102,.3);
@@ -291,7 +323,6 @@ export default function PaymentPage() {
     .dl-banner { background:rgba(201,168,76,.06); border:1px solid rgba(201,168,76,.18); border-left:3px solid var(--gold); border-radius:4px; padding:12px 16px; margin-bottom:20px; animation:goldPulse 3s ease-in-out infinite; }
     .dl-lbl { font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--ivory-dim); font-weight:500; display:block; margin-bottom:8px; }
 
-    /* Direct tab QR note badge */
     .dl-direct-badge {
       display:inline-flex; align-items:center; gap:5px;
       background:rgba(201,168,76,.1); border:1px solid rgba(201,168,76,.25);
@@ -301,7 +332,7 @@ export default function PaymentPage() {
     }
   `;
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight:"100vh", background:"#0A0A0A", display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 16px" }}>
       <style>{css}</style>
@@ -368,7 +399,7 @@ export default function PaymentPage() {
               <div style={{ padding:"24px 24px 20px", borderBottom:"1px solid #181818" }}>
 
                 {/* Product banner */}
-                {(urlParams.productName || urlParams.amount) && (
+                {(urlParams.productName || amount) && (
                   <div className="dl-banner">
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                       <div>
@@ -377,16 +408,16 @@ export default function PaymentPage() {
                         )}
                         <p style={{ fontSize:10, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--ivory-dim)", fontWeight:300 }}>Digital Product</p>
                       </div>
-                      {urlParams.amount && (
+                      {amount && (
                         <span className="dl-display" style={{ color:"var(--gold)", fontSize:"1.5rem", fontWeight:700 }}>
-                          ₹{Number(urlParams.amount).toLocaleString()}
+                          ₹{Number(amount).toLocaleString()}
                         </span>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* ── Method tabs — always at least [Direct] ── */}
+                {/* ── Method tabs ── */}
                 {qrLoading ? (
                   <div style={{ display:"flex", gap:8, marginBottom:20 }}>
                     {[80, 96, 72].map((w) => <div key={w} className="dl-shimmer" style={{ height:32, borderRadius:4, width:w }} />)}
@@ -397,8 +428,6 @@ export default function PaymentPage() {
                       const isDirect = !!m._isDirectTab;
                       const icon     = !isDirect ? (METHOD_META[m.method]?.icon || null) : null;
                       const active   = selectedIdx === idx;
-
-                      // Direct tab gets its own CSS classes, others use standard ones
                       const tabClass = isDirect
                         ? (active ? "dl-tab-direct-on" : "dl-tab-direct-off")
                         : (active ? "dl-tab-on" : "dl-tab-off");
@@ -410,16 +439,12 @@ export default function PaymentPage() {
                           className={tabClass}
                           style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 12px", borderRadius:4, border:"1px solid", fontSize:11, fontWeight:600, whiteSpace:"nowrap", flexShrink:0, cursor:"pointer", transition:"all .2s", letterSpacing:".5px", textTransform:"uppercase" }}
                         >
-                          {/* Direct tab gets a small store icon */}
-                          {isDirect && (
-                            <span style={{ fontSize:13, lineHeight:1 }}>🏪</span>
-                          )}
+                          {isDirect && <span style={{ fontSize:13, lineHeight:1 }}>🏪</span>}
                           {!isDirect && icon && (
                             <img src={icon} alt={tabLabels[idx]} style={{ width:14, height:14, objectFit:"contain" }}
                               onError={(e) => { e.target.style.display = "none"; }} />
                           )}
                           {tabLabels[idx]}
-                          {/* Small "direct" pill on the tab */}
                           {isDirect && (
                             <span style={{ fontSize:8, background:"rgba(201,168,76,.2)", borderRadius:2, padding:"1px 4px", marginLeft:2, letterSpacing:"0.5px", color:"var(--gold)" }}>
                               DIRECT
@@ -442,7 +467,6 @@ export default function PaymentPage() {
                   </div>
                 ) : activeMethod ? (
                   <div>
-                    {/* QR image */}
                     {activeMethod.qrBase64 ? (
                       <div style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
                         <div style={{ background:"#fff", padding:12, borderRadius:4, border:"1px solid rgba(201,168,76,.2)", boxShadow:"0 0 32px rgba(201,168,76,.06)" }}>
@@ -452,11 +476,8 @@ export default function PaymentPage() {
                             style={{ width:160, height:160, objectFit:"contain", display:"block" }}
                           />
                         </div>
-                        {/* Direct tab — show a note instead of "Scan with any UPI app" */}
                         {activeMethod._isDirectTab ? (
-                          <span className="dl-direct-badge">
-                            🏪 Pay directly to seller
-                          </span>
+                          <span className="dl-direct-badge">🏪 Pay directly to seller</span>
                         ) : (
                           <p style={{ fontSize:11, color:"var(--ivory-dim)", marginTop:8, letterSpacing:".5px" }}>
                             Scan with any UPI app
@@ -470,7 +491,6 @@ export default function PaymentPage() {
                       </div>
                     )}
 
-                    {/* Details row — only shown for non-direct tabs */}
                     {!activeMethod._isDirectTab && (
                       <div style={{ marginTop:16, paddingTop:16, borderTop:"1px solid #181818", display:"flex", flexDirection:"column", gap:10 }}>
                         {activeMethod.name && (
@@ -497,12 +517,10 @@ export default function PaymentPage() {
                       </div>
                     )}
 
-                    {/* Timer — only for dynamic tabs */}
                     {!activeMethod._isDirectTab && qrData?.nextRefreshAt && (
                       <QRTimer nextRefreshAt={qrData.nextRefreshAt} />
                     )}
 
-                    {/* ★ QR error banner only on dynamic tabs */}
                     {!activeMethod._isDirectTab && qrError && (
                       <div style={{ display:"flex", alignItems:"center", gap:8, color:"#f97316", fontSize:12, marginTop:12, background:"rgba(249,115,22,.05)", border:"1px solid rgba(249,115,22,.2)", borderRadius:4, padding:"10px 12px" }}>
                         <FiAlertCircle size={14} style={{ flexShrink:0 }} />
@@ -524,25 +542,39 @@ export default function PaymentPage() {
 
                 <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
-                  {/* Amount */}
+                  {/* Amount — always read-only, locked from URL/product */}
                   <div>
                     <label className="dl-lbl">Amount Paid (₹)</label>
                     <div style={{ display:"flex", alignItems:"center", background:"var(--dark2)", border:"1px solid #1e1e1e", borderRadius:4, overflow:"hidden" }}>
                       <span style={{ padding:"14px", color:"var(--gold)", fontWeight:700, borderRight:"1px solid #1e1e1e", background:"rgba(201,168,76,.05)", fontSize:15, lineHeight:1, flexShrink:0 }}>₹</span>
                       <input
-                        type="number" min="1" placeholder="e.g. 1000"
+                        type="number"
+                        min="1"
+                        placeholder="Loading…"
                         value={amount}
-                        onChange={(e) => { if (!urlParams.amount) setAmount(e.target.value); }}
-                        readOnly={!!urlParams.amount}
-                        style={{ flex:1, background:"transparent", border:"none", color:"var(--ivory)", fontSize:15, padding:"14px", outline:"none", fontWeight:urlParams.amount?600:400, cursor:urlParams.amount?"default":"text" }}
+                        onChange={(e) => { if (!amountLocked) setAmount(e.target.value); }}
+                        readOnly={amountLocked}
+                        style={{
+                          flex:1,
+                          background:"transparent",
+                          border:"none",
+                          color:"var(--ivory)",
+                          fontSize:15,
+                          padding:"14px",
+                          outline:"none",
+                          fontWeight: amountLocked ? 600 : 400,
+                          cursor: amountLocked ? "default" : "text"
+                        }}
                       />
-                      {urlParams.amount && (
+                      {amountLocked && (
                         <span style={{ padding:"0 12px", fontSize:9, letterSpacing:"1.5px", textTransform:"uppercase", color:"var(--gold)", opacity:.8, flexShrink:0 }}>FIXED</span>
                       )}
                     </div>
-                    {urlParams.amount && (
-                      <p style={{ fontSize:10, color:"#555", marginTop:5 }}>Amount is fixed based on the product you selected</p>
-                    )}
+                    <p style={{ fontSize:10, color:"#555", marginTop:5 }}>
+                      {amountLocked
+                        ? "Amount is fixed based on the product you selected"
+                        : "Enter the amount you paid"}
+                    </p>
                   </div>
 
                   {/* Email */}
@@ -605,9 +637,8 @@ export default function PaymentPage() {
                     )}
                   </button>
 
-                  {/* ★ Payment Error / WhatsApp button */}
+                  {/* WhatsApp support */}
                   <div style={{ marginTop:4 }}>
-                    {/* Divider */}
                     <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
                       <div style={{ flex:1, height:1, background:"#1a1a1a" }} />
                       <span style={{ fontSize:10, color:"#333", letterSpacing:"1px", textTransform:"uppercase" }}>Having trouble?</span>
@@ -615,7 +646,6 @@ export default function PaymentPage() {
                     </div>
 
                     <button type="button" onClick={openWhatsApp} className="dl-wa-btn">
-                      {/* WhatsApp SVG icon */}
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                       </svg>

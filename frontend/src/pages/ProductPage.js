@@ -489,11 +489,6 @@ const reviews = [
   { id: 4, name: "Priya Das", city: "Bangalore", review: "Best purchase I've made for my trading setup. Full premium access, no limits. Absolutely worth every rupee." },
 ];
 
-// ── IMPORTANT: Set this to your React app's payment page route ────────────────
-// If PaymentPage is hosted at the root of your app (e.g. yourapp.com/payment),
-// change this to your actual deployed URL or use a relative path like "/payment"
-const PAYMENT_PAGE_BASE_URL = process.env.REACT_APP_PAYMENT_URL || "/payment";
-
 const ProductPage = () => {
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -513,7 +508,8 @@ const ProductPage = () => {
 
     const fetchProduct = async () => {
       try {
-        const response = await fetch(`http://localhost:3046/api/products/${id}`);
+        const apiBase = process.env.REACT_APP_API_BASE || "http://localhost:3046/api";
+        const response = await fetch(`${apiBase}/products/${id}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to fetch product");
         setProduct(data);
@@ -532,10 +528,14 @@ const ProductPage = () => {
       alert("Error: Could not retrieve product details. Please try again later.");
       return;
     }
+
     const encodedProductName = encodeURIComponent(product.name || "Product");
 
-    // ── Redirects to YOUR React PaymentPage with amount, productId, productName ──
-    const paymentUrl = `${PAYMENT_PAGE_BASE_URL}?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
+    // ── FIX: Build URL dynamically using current origin + hash routing ──
+    // This works on localhost AND on your DigitalOcean domain automatically.
+    // HashRouter uses /#/route format, so payment page is at /#/payment
+    const paymentUrl = `${window.location.origin}/#/payment?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
+
     window.location.href = paymentUrl;
   };
 
