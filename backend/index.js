@@ -7,27 +7,17 @@ require('dotenv').config();
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const fs = require('fs');
-const cron = require('node-cron');
 const FormData = require('form-data');
 const fetch = require('node-fetch'); // npm install node-fetch@2
 const productRoutes = require("./routes/productRoutes");
-const lotus365 = require("./services/lotus365.service");
 
 const app = express();
 const MONGO_URL = process.env.MONGO_URL;
 const PORT = process.env.PORT || 3046;
 
 // ── Telegram config ───────────────────────────────────────────────────────────
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;       // e.g. 123456:ABC-DEF...
-const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID;          // your personal/group chat ID
-
-// ── QR refresh interval (minutes) ────────────────────────────────────────────
-const QR_REFRESH_MINUTES = parseInt(process.env.QR_REFRESH_INTERVAL) || 20;
-
-// ── Default deposit amount used for QR scraping ───────────────────────────────
-// The QR codes on Lotus365 are not amount-specific in practice;
-// we use a fixed seed amount just to get past the amount screen.
-const SEED_AMOUNT = parseInt(process.env.QR_SEED_AMOUNT) || 500;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
@@ -56,37 +46,6 @@ const upload = multer({
     else cb(new Error("Only image files are allowed"), false);
   },
 });
-
-// ─── QR State (single shared cache — not per-amount) ─────────────────────────
-let qrState = {
-  methods: [],
-  lastUpdated: null,
-  nextRefreshAt: null,
-  isLoading: false,
-  error: null,
-};
-
-async function updateQR() {
-  if (qrState.isLoading) {
-    console.log("[QR] Already refreshing, skipping duplicate trigger.");
-    return;
-  }
-  qrState.isLoading = true;
-  qrState.error = null;
-  console.log(`[QR] Fetching payment methods from Lotus365 (seed amount: ₹${SEED_AMOUNT})...`);
-  try {
-    const result = await lotus365.refreshQR(SEED_AMOUNT);
-    qrState.methods      = result.methods;
-    qrState.lastUpdated  = result.timestamp;
-    qrState.nextRefreshAt = Date.now() + QR_REFRESH_MINUTES * 60 * 1000;
-    console.log(`[QR] Updated — ${result.methods.length} method(s) cached at ${new Date().toLocaleTimeString()}`);
-  } catch (err) {
-    qrState.error = err.message;
-    console.error("[QR] Update failed:", err.message);
-  } finally {
-    qrState.isLoading = false;
-  }
-}
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 async function sendTelegramMessage(text) {
@@ -127,28 +86,6 @@ app.get('/health', (req, res) => {
 // Product routes
 app.use("/api/products", productRoutes);
 
-// GET /api/qr — return cached QR data
-app.get('/api/qr', (req, res) => {
-  if (qrState.isLoading && qrState.methods.length === 0) {
-    return res.json({ loading: true, message: "QR codes are being fetched, please wait..." });
-  }
-  if (qrState.error && qrState.methods.length === 0) {
-    return res.status(500).json({ error: qrState.error });
-  }
-  res.json({
-    methods:       qrState.methods,
-    lastUpdated:   qrState.lastUpdated,
-    nextRefreshAt: qrState.nextRefreshAt,
-    isRefreshing:  qrState.isLoading,
-  });
-});
-
-// POST /api/qr/refresh — manually trigger a QR refresh (admin use)
-app.post('/api/qr/refresh', (req, res) => {
-  updateQR(); // fire-and-forget
-  res.json({ message: "QR refresh triggered." });
-});
-
 // POST /api/deposit — receive UTR + email + screenshot, forward to Telegram
 app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
   const { utr, email, amount, method } = req.body;
@@ -181,9 +118,6 @@ app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
     // ── Send photo + caption to Telegram ──────────────────────────────────────
     await sendTelegramPhoto(screenshotPath, caption);
 
-    // If photo send fails silently, also send a text message as backup
-    // (sendTelegramPhoto already handles errors internally)
-
     console.log(`[Deposit] Forwarded to Telegram — UTR: ${utr.trim()}, Email: ${email.trim()}`);
 
     // ── Cleanup uploaded file ─────────────────────────────────────────────────
@@ -210,15 +144,6 @@ mongoose
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
 
-      // Initial QR fetch on startup
-      updateQR();
-
-      // Cron: refresh QR every N minutes
-      cron.schedule(`*/${QR_REFRESH_MINUTES} * * * *`, () => {
-        console.log(`[QR] Cron refresh triggered (every ${QR_REFRESH_MINUTES} min)`);
-        updateQR();
-      });
-
       // Self-ping every 5 mins (Render free tier keep-alive)
       setInterval(() => {
         fetch(`https://dexterluxuries.onrender.com/health`)
@@ -233,8 +158,7 @@ mongoose
   });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
-process.on("SIGTERM", async () => {
+process.on("SIGTERM", () => {
   console.log("[Server] Shutting down gracefully...");
-  await lotus365.closeBrowser();
   process.exit(0);
 });

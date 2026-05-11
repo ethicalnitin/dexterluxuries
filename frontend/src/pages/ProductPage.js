@@ -5,6 +5,20 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Countdown from "react-countdown";
 
+// ── Price conversion helpers ──────────────────────────────────────────────────
+const INR_TO_USD = 0.012;
+
+function toUSD(inr) {
+  if (!inr) return null;
+  const n = Number(inr);
+  return n < 500 ? 25 : Math.round(n * INR_TO_USD);
+}
+
+function fmtUSD(usd) {
+  return `$${usd}`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -42,14 +56,10 @@ const style = `
     font-family: 'DM Sans', sans-serif;
   }
 
-  .pp-loading-dots {
-    display: flex;
-    gap: 8px;
-  }
+  .pp-loading-dots { display: flex; gap: 8px; }
 
   .pp-loading-dot {
-    width: 8px;
-    height: 8px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--gold);
     animation: dotBounce 1.2s infinite;
@@ -95,10 +105,7 @@ const style = `
     align-items: start;
   }
 
-  .pp-image-col {
-    position: sticky;
-    top: 100px;
-  }
+  .pp-image-col { position: sticky; top: 100px; }
 
   .pp-image-wrap {
     position: relative;
@@ -119,8 +126,7 @@ const style = `
 
   .pp-discount-badge {
     position: absolute;
-    top: 16px;
-    left: 16px;
+    top: 16px; left: 16px;
     background: var(--gold);
     color: #000;
     font-size: 11px;
@@ -154,11 +160,7 @@ const style = `
 
   .pp-trust-pill:last-child { border-right: none; }
 
-  .pp-detail-col {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
+  .pp-detail-col { display: flex; flex-direction: column; gap: 0; }
 
   .pp-eyebrow {
     font-size: 10px;
@@ -205,11 +207,7 @@ const style = `
     margin-bottom: 14px;
   }
 
-  .pp-countdown-display {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  .pp-countdown-display { display: flex; align-items: center; gap: 8px; }
 
   .pp-time-block {
     display: flex;
@@ -246,11 +244,7 @@ const style = `
     margin-bottom: 14px;
   }
 
-  .pp-expired {
-    font-size: 14px;
-    color: rgba(255,80,80,0.8);
-    font-weight: 400;
-  }
+  .pp-expired { font-size: 14px; color: rgba(255,80,80,0.8); font-weight: 400; }
 
   .pp-pricing {
     display: flex;
@@ -315,11 +309,7 @@ const style = `
 
   .pp-buy-btn:active { transform: translateY(0); }
 
-  .pp-btn-arrow {
-    font-size: 18px;
-    transition: transform 0.2s;
-  }
-
+  .pp-btn-arrow { font-size: 18px; transition: transform 0.2s; }
   .pp-buy-btn:hover .pp-btn-arrow { transform: translateX(4px); }
 
   .pp-cta-note {
@@ -357,12 +347,7 @@ const style = `
   .pp-desc-body p { margin-bottom: 12px; }
   .pp-desc-body strong { color: var(--white); font-weight: 500; }
 
-  .pp-inline-error {
-    font-size: 13px;
-    color: rgba(255,100,100,0.8);
-    font-weight: 300;
-    margin-top: 12px;
-  }
+  .pp-inline-error { font-size: 13px; color: rgba(255,100,100,0.8); font-weight: 300; margin-top: 12px; }
 
   .pp-reviews {
     background: var(--dark2);
@@ -370,10 +355,7 @@ const style = `
     padding: 80px 32px 90px;
   }
 
-  .pp-reviews-inner {
-    max-width: 860px;
-    margin: 0 auto;
-  }
+  .pp-reviews-inner { max-width: 860px; margin: 0 auto; }
 
   .pp-reviews-eyebrow {
     font-size: 11px;
@@ -409,18 +391,12 @@ const style = `
     font-size: 120px;
     color: rgba(201,168,76,0.1);
     position: absolute;
-    top: -10px;
-    left: 20px;
+    top: -10px; left: 20px;
     line-height: 1;
     pointer-events: none;
   }
 
-  .pp-review-stars {
-    color: var(--gold);
-    font-size: 16px;
-    letter-spacing: 3px;
-    margin-bottom: 18px;
-  }
+  .pp-review-stars { color: var(--gold); font-size: 16px; letter-spacing: 3px; margin-bottom: 18px; }
 
   .pp-review-text {
     font-size: clamp(1rem, 2vw, 1.15rem);
@@ -431,12 +407,7 @@ const style = `
     margin-bottom: 24px;
   }
 
-  .pp-review-divider {
-    width: 36px;
-    height: 1px;
-    background: var(--gold);
-    margin-bottom: 14px;
-  }
+  .pp-review-divider { width: 36px; height: 1px; background: var(--gold); margin-bottom: 14px; }
 
   .pp-review-name {
     font-size: 12px;
@@ -446,16 +417,8 @@ const style = `
     font-weight: 500;
   }
 
-  .pp-reviews .slick-dots li button:before {
-    color: var(--gold) !important;
-    opacity: 0.3;
-    font-size: 8px;
-  }
-
-  .pp-reviews .slick-dots li.slick-active button:before {
-    opacity: 1;
-    color: var(--gold) !important;
-  }
+  .pp-reviews .slick-dots li button:before { color: var(--gold) !important; opacity: 0.3; font-size: 8px; }
+  .pp-reviews .slick-dots li.slick-active button:before { opacity: 1; color: var(--gold) !important; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(20px); }
@@ -463,14 +426,8 @@ const style = `
   }
 
   @media (max-width: 900px) {
-    .pp-grid {
-      grid-template-columns: 1fr;
-      gap: 40px;
-      padding: 40px 24px 64px;
-    }
-
+    .pp-grid { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px 64px; }
     .pp-image-col { position: static; }
-
     .pp-trust-row { flex-wrap: wrap; }
     .pp-trust-pill { min-width: 50%; }
   }
@@ -483,16 +440,16 @@ const style = `
 `;
 
 const reviews = [
-  { id: 1, name: "Amit Sharma", city: "Delhi", review: "Activated within 5 minutes. TradingView Premium at this price is unreal. All indicators and features work perfectly." },
-  { id: 2, name: "Sneha Verma", city: "Pune", review: "Was skeptical at first, but the delivery was instant and everything works flawlessly. Saved so much money!" },
-  { id: 3, name: "Rahul Mehta", city: "Mumbai", review: "Been using for 3 months straight without any issues. The support team responded in under 10 minutes when I had a question." },
-  { id: 4, name: "Priya Das", city: "Bangalore", review: "Best purchase I've made for my trading setup. Full premium access, no limits. Absolutely worth every rupee." },
+  { id: 1, name: "Amit Sharma",  city: "Delhi",     review: "Activated within 5 minutes. TradingView Premium at this price is unreal. All indicators and features work perfectly." },
+  { id: 2, name: "Sneha Verma",  city: "Pune",      review: "Was skeptical at first, but the delivery was instant and everything works flawlessly. Saved so much money!" },
+  { id: 3, name: "Rahul Mehta",  city: "Mumbai",    review: "Been using for 3 months straight without any issues. The support team responded in under 10 minutes when I had a question." },
+  { id: 4, name: "Priya Das",    city: "Bangalore", review: "Best purchase I've made for my trading setup. Full premium access, no limits. Absolutely worth every rupee." },
 ];
 
 const ProductPage = () => {
-  const [product, setProduct] = useState(null);
+  const [product,   setProduct]   = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error,     setError]     = useState("");
   const { id } = useParams();
 
   useEffect(() => {
@@ -508,7 +465,7 @@ const ProductPage = () => {
 
     const fetchProduct = async () => {
       try {
-        const apiBase = process.env.REACT_APP_API_BASE || "http://localhost:3046/api";
+        const apiBase = process.env.REACT_APP_API_BASE || "https://dexterluxuries.shop/api";
         const response = await fetch(`${apiBase}/products/${id}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to fetch product");
@@ -528,14 +485,9 @@ const ProductPage = () => {
       alert("Error: Could not retrieve product details. Please try again later.");
       return;
     }
-
     const encodedProductName = encodeURIComponent(product.name || "Product");
-
-    // ── FIX: Build URL dynamically using current origin + hash routing ──
-    // This works on localhost AND on your DigitalOcean domain automatically.
-    // HashRouter uses /#/route format, so payment page is at /#/payment
+    // Pass raw INR price — PaymentPage handles the USD conversion
     const paymentUrl = `${window.location.origin}/#/payment?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
-
     window.location.href = paymentUrl;
   };
 
@@ -545,9 +497,7 @@ const ProductPage = () => {
         <style>{style}</style>
         <div className="pp-loading">
           <div className="pp-loading-dots">
-            <div className="pp-loading-dot" />
-            <div className="pp-loading-dot" />
-            <div className="pp-loading-dot" />
+            <div className="pp-loading-dot" /><div className="pp-loading-dot" /><div className="pp-loading-dot" />
           </div>
           <p>Loading product details…</p>
         </div>
@@ -568,9 +518,14 @@ const ProductPage = () => {
   }
 
   const countdownEnd = new Date(Date.now() + 3600000);
-  const discount = product.strikeThroughPrice
-    ? Math.round(((product.strikeThroughPrice - product.price) / product.strikeThroughPrice) * 100)
+
+  // ── Compute USD prices ──────────────────────────────────────────────────────
+  const usdPrice        = toUSD(product.price);
+  const usdStrike       = product.strikeThroughPrice ? toUSD(product.strikeThroughPrice) : null;
+  const discount        = usdStrike && usdPrice
+    ? Math.round(((usdStrike - usdPrice) / usdStrike) * 100)
     : null;
+  // ───────────────────────────────────────────────────────────────────────────
 
   const carouselSettings = {
     dots: true, infinite: true, speed: 800,
@@ -591,7 +546,7 @@ const ProductPage = () => {
               <img src={product.image} alt={product.name} className="pp-product-img" />
             </div>
             <div className="pp-trust-row">
-              {["⚡ Instant Delivery", "🔒 Secure Payment", "♾️ Lifetime Access", "🔄 Replacement Guarantee"].map(t => (
+              {["⚡ Instant Delivery","🔒 Secure Payment","♾️ Lifetime Access","🔄 Replacement Guarantee"].map(t => (
                 <span key={t} className="pp-trust-pill">{t}</span>
               ))}
             </div>
@@ -624,14 +579,15 @@ const ProductPage = () => {
               />
             </div>
 
+            {/* ── Prices in USD ── */}
             <div className="pp-pricing">
-              <span className="pp-price-current">₹{product.price}</span>
-              {product.strikeThroughPrice && <span className="pp-price-strike">₹{product.strikeThroughPrice}</span>}
-              {discount && <span className="pp-price-save">Save {discount}%</span>}
+              <span className="pp-price-current">{fmtUSD(usdPrice)}</span>
+              {usdStrike && <span className="pp-price-strike">{fmtUSD(usdStrike)}</span>}
+              {discount  && <span className="pp-price-save">Save {discount}%</span>}
             </div>
 
             <button className="pp-buy-btn" onClick={handleBuyNowClick}>
-              Buy Now — ₹{product.price} <span className="pp-btn-arrow">→</span>
+              Buy Now — {fmtUSD(usdPrice)} <span className="pp-btn-arrow">→</span>
             </button>
             <p className="pp-cta-note">
               You'll be redirected to our secure payment page. Instant delivery after payment.

@@ -455,7 +455,29 @@ const slides = [
   { img: "https://images.unsplash.com/photo-1556740749-887f6717d7e4" },
 ];
 
-const marqueeText = "📣 More than 80% off on digital products! 🛒 ✨ Limited Time Offer!  🚚 Instant Digital Delivery on all products! ⚡ TradingView Premium starting at ₹495! 🔥";
+const marqueeText = "📣 More than 80% off on digital products! 🛒 ✨ Limited Time Offer!  🚚 Instant Digital Delivery on all products! ⚡ TradingView Premium starting at $17! 🔥";
+
+/**
+ * Returns display price and strikethrough price for a product.
+ * Rule: if original INR price < 500 → show $17 (strike $25)
+ *       otherwise → convert ₹ to $ (1 USD ≈ 84 INR, rounded to nearest dollar)
+ */
+const INR_TO_USD = 84;
+
+const toUSD = (inr) => `$${Math.round(inr / INR_TO_USD)}`;
+
+const getDisplayPrice = (price, strikeThroughPrice) => {
+  if (price < 500) {
+    return {
+      displayPrice: "$17",
+      displayStrike: "$25",
+    };
+  }
+  return {
+    displayPrice: toUSD(price),
+    displayStrike: strikeThroughPrice ? toUSD(strikeThroughPrice) : null,
+  };
+};
 
 const HomePage = () => {
   const [products, setProducts] = useState([]);
@@ -463,7 +485,7 @@ const HomePage = () => {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
-    fetch("http://localhost:3046/api/products")
+    fetch("https://dexterluxuries.shop/api/products")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
@@ -536,31 +558,48 @@ const HomePage = () => {
             </div>
           ) : (
             <div className="hp-grid">
-              {products.map((product) => (
-                <div key={product.id} className="hp-card">
-                  <Link to={`/product/${product.id}`} className="hp-card-img-wrap">
-                    <img src={product.image} alt={product.name} className="hp-card-img" />
-                    <div className="hp-card-badge">Digital</div>
-                  </Link>
-                  <div className="hp-card-body">
-                    <Link to={`/product/${product.id}`}>
-                      <h3 className="hp-card-name">{product.name}</h3>
+              {products.map((product) => {
+                const { displayPrice, displayStrike } = getDisplayPrice(
+                  product.price,
+                  product.strikeThroughPrice
+                );
+                const discountPct =
+                  product.strikeThroughPrice && product.price < 500
+                    ? Math.round(((25 - 17) / 25) * 100)
+                    : product.strikeThroughPrice
+                    ? Math.round(
+                        ((product.strikeThroughPrice - product.price) /
+                          product.strikeThroughPrice) *
+                          100
+                      )
+                    : null;
+
+                return (
+                  <div key={product.id} className="hp-card">
+                    <Link to={`/product/${product.id}`} className="hp-card-img-wrap">
+                      <img src={product.image} alt={product.name} className="hp-card-img" />
+                      <div className="hp-card-badge">Digital</div>
                     </Link>
-                    <div className="hp-card-pricing">
-                      <span className="hp-card-price">₹{product.price}</span>
-                      {product.strikeThroughPrice && (
-                        <>
-                          <span className="hp-card-strike">₹{product.strikeThroughPrice}</span>
-                          <span className="hp-card-discount">
-                            {Math.round(((product.strikeThroughPrice - product.price) / product.strikeThroughPrice) * 100)}% off
-                          </span>
-                        </>
-                      )}
+                    <div className="hp-card-body">
+                      <Link to={`/product/${product.id}`}>
+                        <h3 className="hp-card-name">{product.name}</h3>
+                      </Link>
+                      <div className="hp-card-pricing">
+                        <span className="hp-card-price">{displayPrice}</span>
+                        {displayStrike && (
+                          <>
+                            <span className="hp-card-strike">{displayStrike}</span>
+                            {discountPct && (
+                              <span className="hp-card-discount">{discountPct}% off</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <Link to={`/product/${product.id}`} className="hp-card-btn">View Details →</Link>
                     </div>
-                    <Link to={`/product/${product.id}`} className="hp-card-btn">View Details →</Link>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
