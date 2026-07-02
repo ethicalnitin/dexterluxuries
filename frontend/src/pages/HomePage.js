@@ -455,27 +455,23 @@ const slides = [
   { img: "https://images.unsplash.com/photo-1556740749-887f6717d7e4" },
 ];
 
-const marqueeText = "📣 More than 80% off on digital products! 🛒 ✨ Limited Time Offer!  🚚 Instant Digital Delivery on all products! ⚡ TradingView Premium starting at $17! 🔥";
+const marqueeText = "📣 More than 80% off on digital products! 🛒 ✨ Limited Time Offer!  🚚 Instant Digital Delivery on all products! ⚡ Premium plans at unbeatable prices! 🔥";
 
 /**
- * Returns display price and strikethrough price for a product.
- * Rule: if original INR price < 500 → show $17 (strike $25)
- *       otherwise → convert ₹ to $ (1 USD ≈ 84 INR, rounded to nearest dollar)
+ * Formats a numeric price as Indian Rupees with proper digit grouping,
+ * e.g. 1499 -> "₹1,499".
  */
-const INR_TO_USD = 84;
+const formatINR = (amount) => `₹${Number(amount).toLocaleString("en-IN")}`;
 
-const toUSD = (inr) => `$${Math.round(inr / INR_TO_USD)}`;
-
+/**
+ * Returns the real display price and (optional) strikethrough price for a
+ * product, taken directly from the product's actual stored values —
+ * no fake/hardcoded pricing and no currency conversion.
+ */
 const getDisplayPrice = (price, strikeThroughPrice) => {
-  if (price < 500) {
-    return {
-      displayPrice: "$17",
-      displayStrike: "$25",
-    };
-  }
   return {
-    displayPrice: toUSD(price),
-    displayStrike: strikeThroughPrice ? toUSD(strikeThroughPrice) : null,
+    displayPrice: formatINR(price),
+    displayStrike: strikeThroughPrice ? formatINR(strikeThroughPrice) : null,
   };
 };
 
@@ -563,16 +559,13 @@ const HomePage = () => {
                   product.price,
                   product.strikeThroughPrice
                 );
-                const discountPct =
-                  product.strikeThroughPrice && product.price < 500
-                    ? Math.round(((25 - 17) / 25) * 100)
-                    : product.strikeThroughPrice
-                    ? Math.round(
-                        ((product.strikeThroughPrice - product.price) /
-                          product.strikeThroughPrice) *
-                          100
-                      )
-                    : null;
+                const discountPct = product.strikeThroughPrice
+                  ? Math.round(
+                      ((product.strikeThroughPrice - product.price) /
+                        product.strikeThroughPrice) *
+                        100
+                    )
+                  : null;
 
                 return (
                   <div key={product.id} className="hp-card">
