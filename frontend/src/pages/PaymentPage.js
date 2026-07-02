@@ -9,20 +9,14 @@ function getHashParams() {
   return new URLSearchParams(hash.slice(queryStart + 1));
 }
 
-const INR_TO_USD = 84;
-
-function toUSD(inrAmount) {
-  const num = Number(inrAmount);
+// The amount arrives in the URL as the real INR price (see ProductPage's
+// handleBuyNowClick, which passes product.price straight through — no
+// conversion). We just format it, we don't convert it to anything.
+function formatINR(amount) {
+  const num = Number(amount);
   if (isNaN(num)) return null;
-  // If the amount passed is < 500, it's a fixed $17 product
-  if (num < 500) return 17;
-  // Otherwise convert from INR to USD
-  return Math.round(num / INR_TO_USD);
-}
-
-function formatUSD(dollarAmount) {
-  return Number(dollarAmount).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
+  return num.toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
 }
@@ -42,10 +36,10 @@ export default function PaymentPage() {
       productName = rawName;
     }
 
-    // Convert the INR amount from URL to USD
-    const usdAmount = rawAmt ? toUSD(rawAmt) : null;
+    // Real INR amount, taken as-is from the URL — no conversion.
+    const inrAmount = rawAmt ? formatINR(rawAmt) : null;
 
-    return { amount: usdAmount, productName };
+    return { amount: inrAmount, productName };
   }, []);
 
   // Auto-open WhatsApp after short delay
@@ -62,7 +56,7 @@ export default function PaymentPage() {
         ? `🛍️ *Product:* ${urlParams.productName}`
         : null,
       urlParams.amount !== null
-        ? `💰 *Amount:* $${formatUSD(urlParams.amount)}`
+        ? `💰 *Amount:* ₹${urlParams.amount}`
         : null,
       ``,
       `Please assist me with payment. Thank you!`,
@@ -385,7 +379,7 @@ export default function PaymentPage() {
 
               {urlParams.amount !== null && (
                 <div className="order-price">
-                  ${formatUSD(urlParams.amount)}
+                  ₹{urlParams.amount}
                 </div>
               )}
 
