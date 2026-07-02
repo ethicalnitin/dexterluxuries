@@ -5,17 +5,14 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Countdown from "react-countdown";
 
-// ── Price conversion helpers ──────────────────────────────────────────────────
-const INR_TO_USD = 0.012;
-
-function toUSD(inr) {
-  if (!inr) return null;
-  const n = Number(inr);
-  return n < 500 ? 25 : Math.round(n * INR_TO_USD);
-}
-
-function fmtUSD(usd) {
-  return `$${usd}`;
+// ── Price formatting helper ───────────────────────────────────────────────────
+// Prices come from the backend in INR. We display the real value — no fake
+// pricing, no currency conversion.
+function formatINR(amount) {
+  if (amount === null || amount === undefined || amount === "") return null;
+  const n = Number(amount);
+  if (Number.isNaN(n)) return null;
+  return `₹${n.toLocaleString("en-IN")}`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -334,6 +331,13 @@ const style = `
     color: var(--white);
   }
 
+  /*
+    .pp-desc-body renders arbitrary HTML that comes from the backend for each
+    product. To keep the page looking consistent no matter what markup a
+    given product's description uses (different heading levels, inline
+    styles, stray colors/fonts from a rich text editor, etc.), every element
+    inside is force-normalized to the store's own type system below.
+  */
   .pp-desc-body {
     font-size: 14.5px;
     color: var(--white-dim);
@@ -341,11 +345,141 @@ const style = `
     font-weight: 300;
   }
 
-  .pp-desc-body ul { padding-left: 0; list-style: none; }
-  .pp-desc-body li { padding: 6px 0; border-bottom: 1px solid rgba(201,168,76,0.07); display: flex; gap: 10px; }
-  .pp-desc-body li::before { content: '✦'; color: var(--gold); font-size: 10px; flex-shrink: 0; margin-top: 4px; }
-  .pp-desc-body p { margin-bottom: 12px; }
-  .pp-desc-body strong { color: var(--white); font-weight: 500; }
+  .pp-desc-body * {
+    color: inherit !important;
+    background: transparent !important;
+    font-family: 'DM Sans', sans-serif !important;
+    max-width: 100%;
+  }
+
+  .pp-desc-body h1,
+  .pp-desc-body h2,
+  .pp-desc-body h3,
+  .pp-desc-body h4,
+  .pp-desc-body h5,
+  .pp-desc-body h6 {
+    font-family: 'Playfair Display', serif !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    color: var(--white) !important;
+    margin: 22px 0 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  .pp-desc-body h1:first-child,
+  .pp-desc-body h2:first-child,
+  .pp-desc-body h3:first-child,
+  .pp-desc-body h4:first-child {
+    margin-top: 0 !important;
+  }
+
+  .pp-desc-body p {
+    margin: 0 0 14px !important;
+    font-size: 14.5px !important;
+    font-weight: 300 !important;
+  }
+
+  .pp-desc-body p:last-child { margin-bottom: 0 !important; }
+
+  .pp-desc-body ul,
+  .pp-desc-body ol {
+    padding-left: 0 !important;
+    list-style: none !important;
+    margin: 0 0 16px !important;
+  }
+
+  .pp-desc-body li {
+    padding: 7px 0 !important;
+    border-bottom: 1px solid rgba(201,168,76,0.07) !important;
+    display: flex !important;
+    gap: 10px !important;
+    font-size: 14.5px !important;
+    font-weight: 300 !important;
+  }
+
+  .pp-desc-body li::before {
+    content: '✦' !important;
+    color: var(--gold) !important;
+    font-size: 10px !important;
+    flex-shrink: 0 !important;
+    margin-top: 4px !important;
+  }
+
+  .pp-desc-body li:last-child { border-bottom: none !important; }
+
+  .pp-desc-body strong,
+  .pp-desc-body b {
+    color: var(--white) !important;
+    font-weight: 500 !important;
+  }
+
+  .pp-desc-body em,
+  .pp-desc-body i { font-style: italic !important; }
+
+  .pp-desc-body a {
+    color: var(--gold) !important;
+    text-decoration: underline !important;
+  }
+
+  .pp-desc-body img {
+    max-width: 100% !important;
+    height: auto !important;
+    border: 1px solid rgba(201,168,76,0.15) !important;
+    margin: 12px 0 !important;
+    display: block !important;
+  }
+
+  .pp-desc-body table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 12px 0 20px !important;
+    font-size: 13.5px !important;
+  }
+
+  .pp-desc-body th,
+  .pp-desc-body td {
+    border: 1px solid rgba(201,168,76,0.15) !important;
+    padding: 8px 10px !important;
+    text-align: left !important;
+  }
+
+  .pp-desc-body th {
+    color: var(--gold) !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    font-size: 11px !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .pp-desc-body blockquote {
+    border-left: 2px solid var(--gold) !important;
+    padding: 4px 0 4px 16px !important;
+    margin: 16px 0 !important;
+    font-style: italic !important;
+    color: var(--white-dim) !important;
+  }
+
+  .pp-desc-body code {
+    font-family: monospace !important;
+    background: var(--dark3) !important;
+    padding: 2px 6px !important;
+    border-radius: 2px !important;
+    font-size: 13px !important;
+    color: var(--gold-light) !important;
+  }
+
+  .pp-desc-body hr {
+    border: none !important;
+    border-top: 1px solid rgba(201,168,76,0.12) !important;
+    margin: 20px 0 !important;
+  }
+
+  .pp-desc-empty {
+    font-size: 14px;
+    color: var(--white-dim);
+    font-weight: 300;
+    font-style: italic;
+  }
 
   .pp-inline-error { font-size: 13px; color: rgba(255,100,100,0.8); font-weight: 300; margin-top: 12px; }
 
@@ -486,7 +620,7 @@ const ProductPage = () => {
       return;
     }
     const encodedProductName = encodeURIComponent(product.name || "Product");
-    // Pass raw INR price — PaymentPage handles the USD conversion
+    // Pass the real INR price straight through
     const paymentUrl = `${window.location.origin}/#/payment?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
     window.location.href = paymentUrl;
   };
@@ -519,11 +653,11 @@ const ProductPage = () => {
 
   const countdownEnd = new Date(Date.now() + 3600000);
 
-  // ── Compute USD prices ──────────────────────────────────────────────────────
-  const usdPrice        = toUSD(product.price);
-  const usdStrike       = product.strikeThroughPrice ? toUSD(product.strikeThroughPrice) : null;
-  const discount        = usdStrike && usdPrice
-    ? Math.round(((usdStrike - usdPrice) / usdStrike) * 100)
+  // ── Real prices, taken directly from the product record ──────────────────────
+  const displayPrice  = formatINR(product.price);
+  const displayStrike = product.strikeThroughPrice ? formatINR(product.strikeThroughPrice) : null;
+  const discount = (product.strikeThroughPrice && product.price)
+    ? Math.round(((product.strikeThroughPrice - product.price) / product.strikeThroughPrice) * 100)
     : null;
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -542,7 +676,7 @@ const ProductPage = () => {
 
           <div className="pp-image-col">
             <div className="pp-image-wrap">
-              {discount && <span className="pp-discount-badge">{discount}% OFF</span>}
+              {discount ? <span className="pp-discount-badge">{discount}% OFF</span> : null}
               <img src={product.image} alt={product.name} className="pp-product-img" />
             </div>
             <div className="pp-trust-row">
@@ -579,26 +713,41 @@ const ProductPage = () => {
               />
             </div>
 
-            {/* ── Prices in USD ── */}
+            {/* ── Real pricing, straight from the backend ── */}
             <div className="pp-pricing">
-              <span className="pp-price-current">{fmtUSD(usdPrice)}</span>
-              {usdStrike && <span className="pp-price-strike">{fmtUSD(usdStrike)}</span>}
-              {discount  && <span className="pp-price-save">Save {discount}%</span>}
+              <span className="pp-price-current">{displayPrice}</span>
+              {displayStrike && <span className="pp-price-strike">{displayStrike}</span>}
+              {discount ? <span className="pp-price-save">Save {discount}%</span> : null}
             </div>
 
             <button className="pp-buy-btn" onClick={handleBuyNowClick}>
-              Buy Now — {fmtUSD(usdPrice)} <span className="pp-btn-arrow">→</span>
+              Buy Now — {displayPrice} <span className="pp-btn-arrow">→</span>
             </button>
             <p className="pp-cta-note">
               You'll be redirected to our secure payment page. Instant delivery after payment.
             </p>
 
-            {product.description && (
-              <div className="pp-description">
-                <h3 className="pp-desc-heading">What's Included</h3>
-                <div className="pp-desc-body" dangerouslySetInnerHTML={{ __html: product.description }} />
-              </div>
-            )}
+            {/*
+              Description always comes from the backend (product.description,
+              raw HTML from the admin's rich text editor). The .pp-desc-body
+              CSS above force-normalizes every tag it can contain — headings,
+              paragraphs, lists, tables, links, images — so every product
+              page looks consistent regardless of how that particular
+              product's description was authored. If a product has no
+              description yet, a plain placeholder is shown instead so the
+              layout doesn't break.
+            */}
+            <div className="pp-description">
+              <h3 className="pp-desc-heading">What's Included</h3>
+              {product.description ? (
+                <div
+                  className="pp-desc-body"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              ) : (
+                <p className="pp-desc-empty">No description available for this product yet.</p>
+              )}
+            </div>
 
             {error && <p className="pp-inline-error">{error}</p>}
           </div>
