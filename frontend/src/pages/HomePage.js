@@ -524,7 +524,7 @@ const HomePage = () => {
               Unlock <span className="hp-hero-accent">Digital</span> Excellence
             </h1>
             <p className="hp-hero-sub">Top-tier digital products at unbeatable prices — instant delivery, zero compromise.</p>
-            <a href="#products" className="hp-hero-cta">Shop Now →</a>
+            
           </div>
           <div className="hp-dots">
             {slides.map((_, i) => (
