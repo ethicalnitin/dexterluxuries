@@ -10,10 +10,8 @@ import RefundPolicy from './pages/RefundPolicy';
 import PrivacyPolicy from './pages/PrivacyPolicy'; 
 import Proofs from './pages/Proofs'; 
 import WhatsappButton from "./components/WhatsappButton";
-
-
-import './index.css';
 import AdminPage from "./pages/AdminPage";
+import './index.css';
 import OrdersPage from "./pages/OrdersPage";
 import PaymentPage from "./pages/PaymentPage";
 

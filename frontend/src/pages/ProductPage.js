@@ -719,7 +719,8 @@ const ProductPage = () => {
               {displayStrike && <span className="pp-price-strike">{displayStrike}</span>}
               {discount ? <span className="pp-price-save">Save {discount}%</span> : null}
             </div>
-
+            
+            {(product?.name || "").toLowerCase().includes("tradingview") ? ( <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "12px" }}> <button className="pp-buy-btn" onClick={() => (window.location.href = `${window.location.origin}/#/product/6`)} > 3 Months <span className="pp-btn-arrow">→</span> </button> <button className="pp-buy-btn" onClick={() => (window.location.href = `${window.location.origin}/#/product/12`)} > 6 Months <span className="pp-btn-arrow">→</span> </button> <button className="pp-buy-btn" onClick={() => (window.location.href = `${window.location.origin}/#/product/18`)} > 12 Months <span className="pp-btn-arrow">→</span> </button> </div> ) : ( <button className="pp-buy-btn" onClick={handleBuyNowClick}> Buy Now — {displayPrice} <span className="pp-btn-arrow">→</span> </button> )}
             <button className="pp-buy-btn" onClick={handleBuyNowClick}>
               Buy Now — {displayPrice} <span className="pp-btn-arrow">→</span>
             </button>
