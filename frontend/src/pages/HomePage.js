@@ -409,6 +409,14 @@ const style = `
     font-weight: 300;
   }
 
+  .hp-empty {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--white-dim);
+    font-size: 15px;
+    font-weight: 300;
+  }
+
   .hp-loading-dot {
     display: inline-block;
     width: 6px;
@@ -524,11 +532,22 @@ const HomePage = () => {
               Unlock <span className="hp-hero-accent">Digital</span> Excellence
             </h1>
             <p className="hp-hero-sub">Top-tier digital products at unbeatable prices — instant delivery, zero compromise.</p>
-            
           </div>
           <div className="hp-dots">
             {slides.map((_, i) => (
               <button key={i} onClick={() => setCurrent(i)} className={`hp-dot ${current === i ? "hp-dot--active" : ""}`} aria-label={`Slide ${i + 1}`} />
+            ))}
+          </div>
+        </section>
+
+        <section className="hp-trust">
+          <p className="hp-trust-label">Why Shop With Us</p>
+          <div className="hp-trust-grid">
+            {trustBadges.map((badge, i) => (
+              <div key={i} className="hp-trust-item">
+                <img src={badge.src} alt={badge.alt} className="hp-trust-img" />
+                <span className="hp-trust-text">{badge.alt}</span>
+              </div>
             ))}
           </div>
         </section>
@@ -551,6 +570,10 @@ const HomePage = () => {
               <span className="hp-loading-dot" />
               <span className="hp-loading-dot" />
               <p style={{ marginTop: 16 }}>Loading products, please wait...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="hp-empty">
+              <p>No products available right now. Please check back soon.</p>
             </div>
           ) : (
             <div className="hp-grid">
@@ -582,9 +605,9 @@ const HomePage = () => {
                         {displayStrike && (
                           <>
                             <span className="hp-card-strike">{displayStrike}</span>
-                            {discountPct && (
+                            {discountPct ? (
                               <span className="hp-card-discount">{discountPct}% off</span>
-                            )}
+                            ) : null}
                           </>
                         )}
                       </div>
