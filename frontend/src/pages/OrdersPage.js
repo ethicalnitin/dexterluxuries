@@ -428,10 +428,7 @@ export default function OrdersPage() {
           {/* ── Header ── */}
           <div className="op-header">
             <div>
-              <div className="op-brand">
-                <span className="op-brand-dexter">DEXTER</span>
-                <span className="op-brand-lux">LUXURIES</span>
-              </div>
+          
               <h1 className="op-title">Recent Orders</h1>
               <p className="op-sub">Live feed of verified purchases · updates in real time</p>
             </div>

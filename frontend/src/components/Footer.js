@@ -204,7 +204,7 @@ export const Footer = () => {
       <footer className="footer-root">
         <div className="footer-top">
           <div className="footer-brand">
-            <div className="footer-brand-name">Dexter Luxuries</div>
+            <div className="footer-brand-name">ChartVault</div>
             <p className="footer-brand-desc">
               India's trusted digital product store since 2021. Serving 50,000+ traders and enthusiasts with premium subscriptions at unbeatable prices.
             </p>
@@ -253,7 +253,7 @@ export const Footer = () => {
         <hr className="footer-divider" />
 
         <div className="footer-bottom">
-          <p className="footer-copy">© 2021–2025 <span>Dexter Luxuries</span>. All Rights Reserved.</p>
+          <p className="footer-copy">© 2021–2025 <span>ChartVault</span>. All Rights Reserved.</p>
           <div className="footer-bottom-links">
             <Link to="/privacy-policy">Privacy Policy</Link>
             <Link to="/refund-policy">Refund Policy</Link>
