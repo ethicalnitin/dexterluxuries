@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "name": "Netflix Premium 4K - 1 Month",
+    "price": 199,
+    "strikeThroughPrice": 499,
+    "image": "https://dexterluxuries.shop/productimages/netflix-premium.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/netflix-premium",
+    "description": "Enjoy Netflix Premium 4K UHD with support for multiple devices and instant delivery."
+  },
+  {
+    "id": 2,
+    "name": "Spotify Premium - 12 Months",
+    "price": 349,
+    "strikeThroughPrice": 1199,
+    "image": "https://dexterluxuries.shop/productimages/spotify.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/spotify-premium",
+    "description": "Ad-free music, unlimited skips, offline downloads, and high-quality audio."
+  },
+  {
+    "id": 3,
+    "name": "Canva Pro - 1 Year",
+    "price": 499,
+    "strikeThroughPrice": 3999,
+    "image": "https://dexterluxuries.shop/productimages/canva-pro.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/canva-pro",
+    "description": "Unlock premium templates, AI features, Brand Kit, and millions of stock assets."
+  },
+  {
+    "id": 4,
+    "name": "YouTube Premium - 3 Months",
+    "price": 249,
+    "strikeThroughPrice": 699,
+    "image": "https://dexterluxuries.shop/productimages/youtube-premium.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/youtube-premium",
+    "description": "Watch videos ad-free, enjoy background play, and access YouTube Music Premium."
+  },
+  {
+    "id": 5,
+    "name": "ChatGPT Plus - 1 Month",
+    "price": 599,
+    "strikeThroughPrice": 1699,
+    "image": "https://dexterluxuries.shop/productimages/chatgpt-plus.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/chatgpt-plus",
+    "description": "Access premium ChatGPT features, faster responses, and priority availability."
+  },
+  {
+    "id": 6,
+    "name": "TradingView Premium - 1 Year",
+    "price": 1299,
+    "strikeThroughPrice": 5999,
+    "image": "https://dexterluxuries.shop/productimages/tradingview-premium.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/tradingview-premium",
+    "description": "Advanced trading charts, unlimited indicators, and real-time market analysis."
+  },
+  {
+    "id": 7,
+    "name": "Amazon Prime Video - 1 Year",
+    "price": 699,
+    "strikeThroughPrice": 1499,
+    "image": "https://dexterluxuries.shop/productimages/amazon-prime.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/amazon-prime",
+    "description": "Unlimited streaming of movies, TV shows, Prime benefits, and Prime Music."
+  },
+  {
+    "id": 8,
+    "name": "Disney+ Hotstar Premium - 1 Year",
+    "price": 499,
+    "strikeThroughPrice": 1499,
+    "image": "https://dexterluxuries.shop/productimages/hotstar.jpg",
+    "downloadLink": "https://dexterluxuries.shop/downloads/hotstar-premium",
+    "description": "Watch live sports, Disney originals, Marvel, Star Wars, and premium content."
+  }
+]

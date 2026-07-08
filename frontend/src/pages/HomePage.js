@@ -532,7 +532,7 @@ const HomePage = () => {
   const [toastIndex, setToastIndex] = useState(0);
 
   useEffect(() => {
-    fetch("https://dexterluxuries.shop/api/products")
+    fetch("https://chartvault.shop/api/products")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
