@@ -50,7 +50,7 @@ export default function PaymentPage() {
 
   function openWhatsApp() {
     const lines = [
-      `👋 Hi, I'd like to place an order on Dexter Luxuries.`,
+      `👋 Hi, I'd like to place an order on ChartVault.`,
       ``,
       urlParams.productName
         ? `🛍️ *Product:* ${urlParams.productName}`
@@ -421,7 +421,7 @@ export default function PaymentPage() {
         </div>
 
         <div className="footer">
-          © Dexter Luxuries · All rights reserved
+          © ChartVault · All rights reserved
         </div>
       </div>
     </div>

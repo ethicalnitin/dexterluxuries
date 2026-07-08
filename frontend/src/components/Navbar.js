@@ -235,8 +235,8 @@ const Navbar = () => {
       <style>{style}</style>
       <header className={`navbar-root ${isScrolled ? "navbar-scrolled" : "navbar-top"}`}>
         <Link to="/" className="navbar-logo-link" onClick={() => setIsOpen(false)}>
-          <img src={logo} alt="Dexter Luxuries" className="navbar-logo-img" />
-          <span className="navbar-brand">Dexter Luxuries</span>
+          <img src={logo} alt="ChartVault" className="navbar-logo-img" />
+          <span className="navbar-brand">ChartVault</span>
         </Link>
 
         <button className="navbar-hamburger" onClick={() => setIsOpen(!isOpen)} aria-label="Toggle menu">
@@ -255,7 +255,7 @@ const Navbar = () => {
               <FaTelegram size={16} /> Join our Telegram
             </button>
           </nav>
-          <p className="navbar-drawer-footer">© 2025 Dexter Luxuries</p>
+          <p className="navbar-drawer-footer">© 2025 ChartVault</p>
         </div>
 
         {isOpen && <div className="navbar-overlay" onClick={() => setIsOpen(false)} />}

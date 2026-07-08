@@ -1205,7 +1205,7 @@ const ProductPage = () => {
 
     const observer = new IntersectionObserver(
       ([entry]) => setShowFloatingHideBtn(entry.isIntersecting),
-      { threshold: 0.15 }
+      { threshold: 0 }
     );
     observer.observe(proofsSectionRef.current);
     return () => observer.disconnect();
