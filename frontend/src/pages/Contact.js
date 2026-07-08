@@ -1,23 +1,26 @@
 import React, { useEffect, useRef } from "react";
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
   :root {
-    --gold: #C9A84C;
-    --gold-light: #E8C97A;
-    --dark: #0A0A0A;
-    --dark2: #111111;
-    --dark3: #1A1A1A;
-    --white: #F5F0E8;
-    --white-dim: rgba(245,240,232,0.6);
-    --white-faint: rgba(245,240,232,0.08);
+    --bg: #05050A;
+    --bg2: #0A0A13;
+    --surface: rgba(255,255,255,0.045);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.09);
+    --violet: #8B5CF6;
+    --violet-soft: #C4B5FD;
+    --cyan: #22D3EE;
+    --text: #F4F2FF;
+    --text-dim: rgba(244,242,255,0.62);
+    --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
   }
 
   .contact-root {
-    background: var(--dark);
-    color: var(--white);
-    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
     min-height: 100vh;
   }
 
@@ -32,42 +35,58 @@ const style = `
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(201,168,76,0.14) 0%, transparent 65%);
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(139,92,246,0.16) 0%, transparent 65%);
     pointer-events: none;
   }
 
   .contact-eyebrow {
-    font-size: 11px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: var(--gold);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 7px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    color: var(--text-dim);
     font-weight: 500;
-    margin-bottom: 20px;
+    margin-bottom: 22px;
     animation: fadeUp 0.6s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .contact-hero-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(2.8rem, 6vw, 5rem);
-    font-weight: 900;
+    font-weight: 700;
+    letter-spacing: -1.5px;
     line-height: 1.1;
     margin-bottom: 20px;
     animation: fadeUp 0.7s 0.1s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .contact-hero-title em {
-    font-style: italic;
-    color: var(--gold);
+    font-style: normal;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .contact-hero-sub {
     font-size: clamp(1rem, 2vw, 1.15rem);
-    color: var(--white-dim);
+    color: var(--text-dim);
     font-weight: 300;
     max-width: 480px;
     margin: 0 auto;
     line-height: 1.7;
     animation: fadeUp 0.7s 0.2s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .contact-body {
@@ -81,18 +100,19 @@ const style = `
   }
 
   .contact-section-eyebrow {
-    font-size: 11px;
-    letter-spacing: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--gold);
-    font-weight: 500;
-    margin-bottom: 16px;
+    color: var(--violet-soft);
+    margin-bottom: 14px;
   }
 
   .contact-section-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(1.6rem, 3vw, 2.2rem);
     font-weight: 700;
+    letter-spacing: -0.5px;
     margin-bottom: 32px;
     line-height: 1.25;
   }
@@ -100,111 +120,92 @@ const style = `
   .contact-channels {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
 
   .contact-card {
-    background: var(--dark2);
-    border: 1px solid rgba(201,168,76,0.12);
-    padding: 24px 26px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 22px 24px;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 18px;
     text-decoration: none;
-    transition: background 0.2s, border-color 0.2s, transform 0.2s;
-    border-radius: 2px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .contact-card::after {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--gold);
-    transform: scaleY(0);
-    transition: transform 0.25s;
+    transition: transform 0.2s, border-color 0.2s, background 0.2s;
+    border-radius: 14px;
   }
 
   .contact-card:hover {
-    background: var(--dark3);
-    border-color: rgba(201,168,76,0.3);
+    background: var(--surface-hover);
+    border-color: rgba(139,92,246,0.4);
     transform: translateX(4px);
   }
 
-  .contact-card:hover::after { transform: scaleY(1); }
-
   .contact-card-icon {
-    width: 48px;
-    height: 48px;
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
-    background: rgba(201,168,76,0.1);
-    border: 1px solid rgba(201,168,76,0.25);
+    background: var(--grad);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 19px;
     flex-shrink: 0;
-    transition: background 0.2s;
-  }
-
-  .contact-card:hover .contact-card-icon {
-    background: rgba(201,168,76,0.18);
   }
 
   .contact-card-label {
-    font-size: 10px;
-    letter-spacing: 2px;
+    font-size: 10.5px;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: var(--gold);
-    font-weight: 500;
+    color: var(--violet-soft);
+    font-weight: 600;
     margin-bottom: 5px;
   }
 
   .contact-card-value {
     font-size: 15px;
-    color: var(--white);
-    font-weight: 400;
+    color: var(--text);
+    font-weight: 500;
   }
 
   .contact-card-desc {
     font-size: 12px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     font-weight: 300;
     margin-top: 3px;
   }
 
   .contact-card-arrow {
     margin-left: auto;
-    color: rgba(201,168,76,0.4);
+    color: var(--text-dim);
     font-size: 18px;
     flex-shrink: 0;
     transition: color 0.2s, transform 0.2s;
   }
 
   .contact-card:hover .contact-card-arrow {
-    color: var(--gold);
+    color: var(--violet-soft);
     transform: translateX(3px);
   }
 
   .contact-info-panel {
-    background: var(--dark2);
-    border: 1px solid rgba(201,168,76,0.12);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
     padding: 40px 36px;
   }
 
   .contact-info-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.4rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.35rem;
     font-weight: 700;
     margin-bottom: 24px;
-    color: var(--white);
+    color: var(--text);
   }
 
   .contact-info-body {
     font-size: 14.5px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.8;
     font-weight: 300;
     margin-bottom: 32px;
@@ -221,7 +222,7 @@ const style = `
     justify-content: space-between;
     align-items: center;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(201,168,76,0.08);
+    border-bottom: 1px solid var(--border);
     font-size: 13.5px;
   }
 
@@ -231,13 +232,13 @@ const style = `
   }
 
   .contact-response-channel {
-    color: var(--white-dim);
+    color: var(--text-dim);
     font-weight: 300;
   }
 
   .contact-response-time {
-    color: var(--gold);
-    font-weight: 500;
+    color: var(--violet-soft);
+    font-weight: 600;
     font-size: 12px;
     letter-spacing: 0.5px;
   }
@@ -326,7 +327,7 @@ const Contact = () => {
       <div className="contact-root">
 
         <section className="contact-hero">
-          <p className="contact-eyebrow">✦ Get in Touch ✦</p>
+          <span className="contact-eyebrow">✦ Get in Touch ✦</span>
           <h1 className="contact-hero-title">
             We're Here to <em>Help.</em>
           </h1>
@@ -358,11 +359,11 @@ const Contact = () => {
             <div className="contact-info-panel">
               <div className="contact-info-title">Before You Reach Out</div>
               <p className="contact-info-body">
-                For the fastest response, message us on <strong style={{color:'#C9A84C'}}>WhatsApp or Telegram</strong>. Include your order details or the product you're interested in so we can help you immediately.
+                For the fastest response, message us on <strong style={{color:'#C4B5FD'}}>WhatsApp or Telegram</strong>. Include your order details or the product you're interested in so we can help you immediately.
                 <br /><br />
                 Our support team operates daily and we are committed to resolving every query the same day.
               </p>
-              <p style={{fontSize:'11px',letterSpacing:'2px',textTransform:'uppercase',color:'#C9A84C',fontWeight:500,marginBottom:16}}>Response Times</p>
+              <p style={{fontSize:'11px',letterSpacing:'2px',textTransform:'uppercase',color:'#C4B5FD',fontWeight:600,marginBottom:16}}>Response Times</p>
               <div className="contact-response-times">
                 {responseTimes.map(r => (
                   <div className="contact-response-item" key={r.channel}>

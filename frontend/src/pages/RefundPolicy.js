@@ -1,21 +1,25 @@
 import React, { useEffect, useRef } from "react";
 
 const style = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  --gold: #C9A84C;
-  --gold-light: #E8C97A;
-  --dark: #0A0A0A;
-  --dark2: #111111;
-  --white: #F5F0E8;
-  --white-dim: rgba(245,240,232,0.65);
+  --bg: #05050A;
+  --bg2: #0A0A13;
+  --surface: rgba(255,255,255,0.045);
+  --border: rgba(255,255,255,0.09);
+  --violet: #8B5CF6;
+  --violet-soft: #C4B5FD;
+  --cyan: #22D3EE;
+  --text: #F4F2FF;
+  --text-dim: rgba(244,242,255,0.62);
+  --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
 }
 
 .refund-root {
-  background: var(--dark);
-  color: var(--white);
-  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
   min-height: 100vh;
 }
 
@@ -26,21 +30,26 @@ const style = `
 }
 
 .refund-title {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: clamp(2.5rem, 5vw, 3.5rem);
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: -1px;
   margin-bottom: 20px;
 }
 
 .refund-title span {
-  color: var(--gold);
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .refund-sub {
-  color: var(--white-dim);
+  color: var(--text-dim);
   font-size: 15px;
   line-height: 1.8;
   margin-bottom: 40px;
+  font-weight: 300;
 }
 
 .refund-section {
@@ -48,15 +57,17 @@ const style = `
 }
 
 .refund-section h3 {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.6rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
   margin-bottom: 16px;
 }
 
 .refund-section p {
-  color: var(--white-dim);
+  color: var(--text-dim);
   line-height: 1.8;
   font-size: 14.5px;
+  font-weight: 300;
 }
 
 .refund-list {
@@ -66,18 +77,20 @@ const style = `
 
 .refund-list li {
   margin-bottom: 10px;
-  color: var(--white-dim);
+  color: var(--text-dim);
+  font-weight: 300;
 }
 
 .refund-divider {
   width: 50px;
   height: 2px;
-  background: linear-gradient(to right, var(--gold), transparent);
+  background: var(--grad);
+  border-radius: 2px;
   margin: 30px 0;
 }
 
 .highlight {
-  color: var(--gold);
+  color: var(--violet-soft);
   font-weight: 500;
 }
 

@@ -73,7 +73,7 @@ export default function PaymentPage() {
   }
 
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
     *, *::before, *::after {
       box-sizing: border-box;
@@ -82,24 +82,27 @@ export default function PaymentPage() {
     }
 
     :root {
-      --gold: #C9A84C;
-      --gold-dim: rgba(201,168,76,.18);
-      --ink: #0C0C0C;
-      --ink2: #111111;
-      --ink3: #1A1A1A;
-      --ivory: #F4EFE6;
-      --ivory-dim: rgba(244,239,230,.5);
+      --violet: #8B5CF6;
+      --cyan: #22D3EE;
+      --violet-soft: #C4B5FD;
+      --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
+      --bg: #05050A;
+      --bg2: #0A0A13;
+      --bg3: #111119;
+      --text: #F4F2FF;
+      --text-dim: rgba(244,242,255,.5);
+      --border: rgba(255,255,255,0.09);
       --wa: #25D366;
       --wa-dim: rgba(37,211,102,.12);
     }
 
     body {
-      background: var(--ink);
+      background: var(--bg);
     }
 
     .page {
       min-height: 100vh;
-      background: var(--ink);
+      background: var(--bg);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -113,8 +116,8 @@ export default function PaymentPage() {
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 70% 50% at 50% -5%, rgba(201,168,76,.08) 0%, transparent 65%),
-        radial-gradient(ellipse 50% 40% at 90% 100%, rgba(37,211,102,.04) 0%, transparent 60%);
+        radial-gradient(ellipse 70% 50% at 50% -5%, rgba(139,92,246,.12) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 90% 100%, rgba(37,211,102,.05) 0%, transparent 60%);
       pointer-events: none;
     }
 
@@ -139,33 +142,36 @@ export default function PaymentPage() {
     }
 
     .diamond {
-      width: 32px;
-      height: 32px;
-      background: var(--gold);
+      width: 30px;
+      height: 30px;
+      background: var(--grad);
       clip-path: polygon(50% 0%,100% 50%,50% 100%,0% 50%);
       margin: 0 auto 14px;
     }
 
     .brand {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 2rem;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.9rem;
       font-weight: 700;
-      color: var(--ivory);
-      letter-spacing: 3px;
+      color: var(--text);
+      letter-spacing: 1px;
       text-transform: uppercase;
     }
 
     .brand span {
-      color: var(--gold);
+      background: var(--grad);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
     }
 
     .brand-sub {
       margin-top: 6px;
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 9px;
       letter-spacing: 4px;
       text-transform: uppercase;
-      color: rgba(244,239,230,.2);
+      color: rgba(244,242,255,.25);
     }
 
     .rule {
@@ -179,57 +185,60 @@ export default function PaymentPage() {
     .rule-line {
       width: 56px;
       height: 1px;
-      background: linear-gradient(to right, transparent, var(--gold-dim));
+      background: linear-gradient(to right, transparent, rgba(139,92,246,.3));
     }
 
     .rule-line.r {
-      background: linear-gradient(to left, transparent, var(--gold-dim));
+      background: linear-gradient(to left, transparent, rgba(139,92,246,.3));
     }
 
     .rule-dot {
       width: 4px;
       height: 4px;
-      background: var(--gold);
+      background: var(--violet);
       transform: rotate(45deg);
     }
 
     .panel {
-      background: var(--ink2);
-      border: 1px solid var(--ink3);
-      border-radius: 2px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
       padding: 40px 28px 36px;
-      box-shadow: 0 40px 100px rgba(0,0,0,.6), 0 0 0 1px rgba(201,168,76,.04);
+      box-shadow: 0 40px 100px rgba(0,0,0,.6);
     }
 
     .order-label {
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 9px;
       letter-spacing: 2.5px;
       text-transform: uppercase;
-      color: rgba(244,239,230,.2);
+      color: rgba(244,242,255,.25);
       margin-bottom: 8px;
     }
 
     .order-name {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 1.15rem;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.1rem;
       font-weight: 600;
-      color: var(--ivory);
+      color: var(--text);
       margin-bottom: 6px;
     }
 
     .order-price {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 2.6rem;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.5rem;
       font-weight: 700;
-      color: var(--gold);
+      background: var(--grad);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
       line-height: 1.1;
     }
 
     .sep {
       width: 40px;
       height: 1px;
-      background: var(--gold-dim);
+      background: rgba(139,92,246,.25);
       margin: 28px auto;
     }
 
@@ -239,12 +248,12 @@ export default function PaymentPage() {
       align-items: center;
       justify-content: center;
       gap: 12px;
-      padding: 18px 24px;
+      padding: 17px 24px;
       background: var(--wa-dim);
       border: 1px solid rgba(37,211,102,.28);
-      border-radius: 2px;
+      border-radius: 10px;
       color: var(--wa);
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 13px;
       font-weight: 600;
       letter-spacing: .8px;
@@ -283,9 +292,9 @@ export default function PaymentPage() {
 
     .redirect-note {
       margin-top: 16px;
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 10px;
-      color: rgba(244,239,230,.18);
+      color: rgba(244,242,255,.2);
       letter-spacing: 1px;
       display: flex;
       align-items: center;
@@ -327,10 +336,10 @@ export default function PaymentPage() {
 
     .confirmed {
       margin-top: 16px;
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 11px;
       color: var(--wa);
-      opacity: .7;
+      opacity: .8;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -339,11 +348,11 @@ export default function PaymentPage() {
 
     .footer {
       margin-top: 24px;
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 9px;
       letter-spacing: 2px;
       text-transform: uppercase;
-      color: #1e1e1e;
+      color: #26262f;
     }
   `;
 

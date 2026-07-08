@@ -1,24 +1,31 @@
 import React, { useEffect, useRef } from "react";
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
   :root {
-    --gold: #C9A84C;
-    --gold-light: #E8C97A;
-    --dark: #0A0A0A;
-    --dark2: #111111;
-    --dark3: #1A1A1A;
-    --white: #F5F0E8;
-    --white-dim: rgba(245,240,232,0.6);
-    --white-faint: rgba(245,240,232,0.08);
+    --bg: #05050A;
+    --bg2: #0A0A13;
+    --surface: rgba(255,255,255,0.045);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.09);
+    --violet: #8B5CF6;
+    --violet-soft: #C4B5FD;
+    --cyan: #22D3EE;
+    --text: #F4F2FF;
+    --text-dim: rgba(244,242,255,0.62);
+    --text-faint: rgba(244,242,255,0.38);
+    --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
   }
 
+  *, *::before, *::after { box-sizing: border-box; }
+
   .about-root {
-    background: var(--dark);
-    color: var(--white);
-    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
     min-height: 100vh;
+    overflow-x: hidden;
   }
 
   .about-hero {
@@ -33,77 +40,98 @@ const style = `
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse 60% 50% at 50% 0%, rgba(201,168,76,0.14) 0%, transparent 65%);
+      radial-gradient(ellipse 60% 50% at 50% 0%, rgba(139,92,246,0.18) 0%, transparent 65%),
+      radial-gradient(ellipse 40% 40% at 80% 10%, rgba(34,211,238,0.1) 0%, transparent 70%);
     pointer-events: none;
   }
 
   .about-eyebrow {
-    font-size: 11px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: var(--gold);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 7px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    color: var(--text-dim);
     font-weight: 500;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     animation: fadeUp 0.6s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .about-hero-title {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(2.8rem, 6vw, 5rem);
-    font-weight: 900;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(2.4rem, 5.5vw, 4.4rem);
+    font-weight: 700;
     line-height: 1.1;
-    margin-bottom: 24px;
+    letter-spacing: -1.5px;
+    margin-bottom: 22px;
     animation: fadeUp 0.7s 0.1s ease both;
+    position: relative;
+    z-index: 1;
   }
 
-  .about-hero-title em {
-    font-style: italic;
-    color: var(--gold);
+  .about-hero-title span {
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .about-hero-sub {
-    font-size: clamp(1rem, 2vw, 1.15rem);
-    color: var(--white-dim);
+    font-size: clamp(1rem, 2vw, 1.1rem);
+    color: var(--text-dim);
     font-weight: 300;
     max-width: 540px;
     margin: 0 auto;
     line-height: 1.7;
     animation: fadeUp 0.7s 0.2s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .about-stats {
     display: flex;
     justify-content: center;
-    border-top: 1px solid rgba(201,168,76,0.15);
-    border-bottom: 1px solid rgba(201,168,76,0.15);
-    background: var(--dark2);
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
   }
 
   .about-stat {
     flex: 1;
+    min-width: 160px;
     max-width: 220px;
     text-align: center;
     padding: 40px 16px;
-    border-right: 1px solid rgba(201,168,76,0.1);
+    border-right: 1px solid var(--border);
   }
 
   .about-stat:last-child { border-right: none; }
 
   .about-stat-num {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.6rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2.4rem;
     font-weight: 700;
-    color: var(--gold);
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
     line-height: 1;
     margin-bottom: 8px;
   }
 
   .about-stat-label {
     font-size: 11px;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: var(--white-dim);
-    font-weight: 400;
+    color: var(--text-faint);
+    font-weight: 500;
   }
 
   .about-story {
@@ -113,25 +141,26 @@ const style = `
   }
 
   .about-section-eyebrow {
-    font-size: 11px;
-    letter-spacing: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--gold);
-    font-weight: 500;
-    margin-bottom: 16px;
+    color: var(--violet-soft);
+    margin-bottom: 14px;
   }
 
   .about-section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(1.8rem, 3.6vw, 2.6rem);
     font-weight: 700;
+    letter-spacing: -0.5px;
     margin-bottom: 40px;
     line-height: 1.2;
   }
 
   .about-body {
     font-size: 15.5px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.85;
     font-weight: 300;
   }
@@ -140,22 +169,23 @@ const style = `
   .about-body p:last-child { margin-bottom: 0; }
 
   .about-body strong {
-    color: var(--white);
-    font-weight: 500;
+    color: var(--text);
+    font-weight: 600;
   }
 
   .about-divider {
     width: 48px;
     height: 2px;
-    background: linear-gradient(to right, var(--gold), transparent);
+    background: var(--grad);
     margin: 48px 0;
+    border-radius: 2px;
   }
 
   .about-values {
-    background: var(--dark2);
-    border-top: 1px solid rgba(201,168,76,0.12);
-    border-bottom: 1px solid rgba(201,168,76,0.12);
-    padding: 80px 24px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 90px 24px;
   }
 
   .about-values-inner {
@@ -165,91 +195,84 @@ const style = `
 
   .about-values-header {
     text-align: center;
-    margin-bottom: 56px;
+    margin-bottom: 52px;
   }
 
   .about-values-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 2px;
-    background: rgba(201,168,76,0.08);
-    border: 1px solid rgba(201,168,76,0.12);
+    gap: 18px;
   }
 
   .about-value-card {
-    background: var(--dark2);
-    padding: 36px 28px;
-    transition: background 0.3s;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 26px;
+    transition: transform 0.25s, border-color 0.25s, background 0.25s;
     position: relative;
     overflow: hidden;
   }
 
-  .about-value-card::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(to right, transparent, var(--gold), transparent);
-    transform: scaleX(0);
-    transition: transform 0.3s;
+  .about-value-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(139,92,246,0.4);
+    background: var(--surface-hover);
   }
 
-  .about-value-card:hover { background: var(--dark3); }
-  .about-value-card:hover::after { transform: scaleX(1); }
-
   .about-value-icon {
-    font-size: 28px;
+    font-size: 26px;
     margin-bottom: 16px;
     display: block;
   }
 
   .about-value-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
     margin-bottom: 10px;
-    color: var(--white);
+    color: var(--text);
   }
 
   .about-value-desc {
     font-size: 13.5px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.65;
     font-weight: 300;
   }
 
   .about-cta {
+    margin: 0 24px 90px;
+    max-width: 1152px;
+    margin-left: auto;
+    margin-right: auto;
     text-align: center;
-    padding: 90px 24px 100px;
+    padding: 70px 40px;
     position: relative;
     overflow: hidden;
-  }
-
-  .about-cta::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 50% 60% at 50% 100%, rgba(201,168,76,0.08) 0%, transparent 70%);
-    pointer-events: none;
+    background: linear-gradient(135deg, rgba(139,92,246,0.14), rgba(34,211,238,0.08));
+    border: 1px solid var(--border);
+    border-radius: 24px;
   }
 
   .about-cta-title {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(1.8rem, 4vw, 3rem);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(1.7rem, 3.6vw, 2.4rem);
     font-weight: 700;
-    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+    margin-bottom: 14px;
   }
 
   .about-cta-sub {
     font-size: 15px;
-    color: var(--white-dim);
-    margin-bottom: 40px;
+    color: var(--text-dim);
+    margin-bottom: 34px;
     font-weight: 300;
   }
 
   .about-cta-buttons {
     display: flex;
-    gap: 16px;
+    gap: 14px;
     justify-content: center;
     flex-wrap: wrap;
   }
@@ -258,21 +281,19 @@ const style = `
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: var(--gold);
-    color: #000;
+    background: var(--grad);
+    color: #0A0A13;
     font-weight: 600;
-    font-size: 14px;
-    padding: 15px 36px;
-    border-radius: 3px;
+    font-size: 14.5px;
+    padding: 14px 32px;
+    border-radius: 10px;
     text-decoration: none;
-    transition: all 0.2s;
-    box-shadow: 0 0 32px rgba(201,168,76,0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
   }
 
   .about-btn-primary:hover {
-    background: var(--gold-light);
     transform: translateY(-2px);
-    box-shadow: 0 8px 40px rgba(201,168,76,0.35);
+    box-shadow: 0 10px 32px rgba(139,92,246,0.35);
   }
 
   .about-btn-secondary {
@@ -280,18 +301,19 @@ const style = `
     align-items: center;
     gap: 8px;
     background: transparent;
-    border: 1px solid rgba(245,240,232,0.2);
-    color: var(--white);
-    font-size: 14px;
-    padding: 15px 36px;
-    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 500;
+    font-size: 14.5px;
+    padding: 14px 30px;
+    border-radius: 10px;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: background 0.2s, border-color 0.2s;
   }
 
   .about-btn-secondary:hover {
-    border-color: var(--gold);
-    color: var(--gold);
+    background: var(--surface);
+    border-color: rgba(255,255,255,0.2);
   }
 
   .reveal {
@@ -311,9 +333,13 @@ const style = `
   }
 
   @media (max-width: 640px) {
-    .about-stats { flex-wrap: wrap; }
-    .about-stat { min-width: 50%; border-bottom: 1px solid rgba(201,168,76,0.08); }
+    .about-stat { min-width: 50%; border-bottom: 1px solid var(--border); }
     .about-story { padding: 60px 24px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .about-hero-title, .about-eyebrow, .about-hero-sub { animation: none !important; }
+    .reveal { opacity: 1; transform: none; transition: none; }
   }
 `;
 
@@ -352,9 +378,9 @@ const About = () => {
       <div className="about-root">
 
         <section className="about-hero">
-          <p className="about-eyebrow">✦ Our Story ✦</p>
+          <span className="about-eyebrow">✦ Our Story ✦</span>
           <h1 className="about-hero-title">
-            Premium Products.<br /><em>Honest Prices.</em>
+            Premium Products.<br /><span>Honest Prices.</span>
           </h1>
           <p className="about-hero-sub">
             Since 2021, Dexter Luxuries has been India's most trusted destination for premium digital subscriptions and tools.
@@ -410,14 +436,12 @@ const About = () => {
           </div>
         </section>
 
-        <section className="about-cta">
-          <div className="reveal" ref={addRef}>
-            <h2 className="about-cta-title">Ready to Get Started?</h2>
-            <p className="about-cta-sub">Join 50,000+ satisfied customers and experience Dexter Luxuries today.</p>
-            <div className="about-cta-buttons">
-              <a href="/products" className="about-btn-primary">Browse Products →</a>
-              <a href="/contact" className="about-btn-secondary">Get in Touch</a>
-            </div>
+        <section className="about-cta reveal" ref={addRef}>
+          <h2 className="about-cta-title">Ready to Get Started?</h2>
+          <p className="about-cta-sub">Join 50,000+ satisfied customers and experience Dexter Luxuries today.</p>
+          <div className="about-cta-buttons">
+            <a href="/products" className="about-btn-primary">Browse Products →</a>
+            <a href="/contact" className="about-btn-secondary">Get in Touch</a>
           </div>
         </section>
 

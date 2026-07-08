@@ -4,7 +4,18 @@ import { Link } from "react-router-dom";
 import logo from "../assets/lgo.jpeg";
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    --nb-bg: #05050A;
+    --nb-surface: rgba(255,255,255,0.045);
+    --nb-border: rgba(255,255,255,0.09);
+    --nb-violet: #8B5CF6;
+    --nb-cyan: #22D3EE;
+    --nb-text: #F4F2FF;
+    --nb-text-dim: rgba(244,242,255,0.62);
+    --nb-grad: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 100%);
+  }
 
   .navbar-root {
     position: fixed;
@@ -18,7 +29,7 @@ const style = `
     padding: 0 32px;
     height: 68px;
     transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
   }
 
   .navbar-top {
@@ -27,10 +38,10 @@ const style = `
   }
 
   .navbar-scrolled {
-    background: rgba(10,10,10,0.96);
-    border-bottom: 1px solid rgba(201,168,76,0.18);
-    box-shadow: 0 4px 32px rgba(0,0,0,0.4);
-    backdrop-filter: blur(12px);
+    background: rgba(5,5,10,0.85);
+    border-bottom: 1px solid var(--nb-border);
+    box-shadow: 0 4px 32px rgba(0,0,0,0.45);
+    backdrop-filter: blur(14px);
   }
 
   .navbar-logo-link {
@@ -42,30 +53,31 @@ const style = `
   }
 
   .navbar-logo-img {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    border: 1.5px solid rgba(201,168,76,0.5);
+    border: 1.5px solid var(--nb-violet);
+    box-shadow: 0 0 16px rgba(139,92,246,0.35);
   }
 
   .navbar-brand {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.15rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1rem;
     font-weight: 700;
-    color: #F5F0E8;
-    letter-spacing: 0.3px;
+    color: var(--nb-text);
+    letter-spacing: -0.2px;
   }
 
   .navbar-hamburger {
-    background: none;
-    border: 1px solid rgba(201,168,76,0.3);
-    color: #C9A84C;
+    background: var(--nb-surface);
+    border: 1px solid var(--nb-border);
+    color: var(--nb-text);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 15px;
     width: 40px;
     height: 40px;
-    border-radius: 4px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -73,11 +85,13 @@ const style = `
     flex-shrink: 0;
     z-index: 1100;
     position: relative;
+    backdrop-filter: blur(8px);
   }
 
   .navbar-hamburger:hover {
-    background: rgba(201,168,76,0.1);
-    border-color: #C9A84C;
+    background: rgba(139,92,246,0.14);
+    border-color: rgba(139,92,246,0.4);
+    color: #C4B5FD;
   }
 
   .navbar-overlay {
@@ -100,8 +114,8 @@ const style = `
     right: 0;
     height: 100vh;
     width: 300px;
-    background: #111111;
-    border-left: 1px solid rgba(201,168,76,0.18);
+    background: #0A0A13;
+    border-left: 1px solid var(--nb-border);
     z-index: 1100;
     display: flex;
     flex-direction: column;
@@ -119,10 +133,10 @@ const style = `
     font-size: 10px;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: #C9A84C;
-    font-weight: 500;
+    color: #C4B5FD;
+    font-weight: 600;
     margin-bottom: 28px;
-    opacity: 0.7;
+    opacity: 0.8;
   }
 
   .navbar-links-mobile {
@@ -133,19 +147,19 @@ const style = `
   }
 
   .nav-link-mobile {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 400;
-    color: rgba(245,240,232,0.75);
+    color: var(--nb-text-dim);
     text-decoration: none;
     padding: 13px 0;
-    border-bottom: 1px solid rgba(201,168,76,0.08);
+    border-bottom: 1px solid var(--nb-border);
     transition: color 0.2s, padding-left 0.2s;
     display: block;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
   }
 
   .nav-link-mobile:hover {
-    color: #C9A84C;
+    color: #C4B5FD;
     padding-left: 6px;
   }
 
@@ -154,28 +168,28 @@ const style = `
     align-items: center;
     justify-content: center;
     gap: 10px;
-    background: #C9A84C;
-    color: #000;
+    background: var(--nb-grad);
+    color: #0A0A13;
     border: none;
     font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     padding: 14px 24px;
-    border-radius: 3px;
+    border-radius: 10px;
     cursor: pointer;
-    transition: background 0.2s, transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
     margin-top: 32px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
   }
 
   .navbar-tg-btn-mobile:hover {
-    background: #E8C97A;
     transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(139,92,246,0.35);
   }
 
   .navbar-drawer-footer {
     font-size: 11px;
-    color: rgba(245,240,232,0.2);
+    color: rgba(244,242,255,0.25);
     text-align: center;
     margin-top: 28px;
     font-weight: 300;

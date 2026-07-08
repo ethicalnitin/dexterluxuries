@@ -2,13 +2,24 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=DM+Sans:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    --ft-bg: #05050A;
+    --ft-border: rgba(255,255,255,0.09);
+    --ft-violet: #8B5CF6;
+    --ft-cyan: #22D3EE;
+    --ft-text: #F4F2FF;
+    --ft-text-dim: rgba(244,242,255,0.55);
+    --ft-text-faint: rgba(244,242,255,0.3);
+    --ft-grad: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 100%);
+  }
 
   .footer-root {
-    background: #080808;
-    color: #F5F0E8;
-    font-family: 'DM Sans', sans-serif;
-    border-top: 1px solid rgba(201,168,76,0.2);
+    background: var(--ft-bg);
+    color: var(--ft-text);
+    font-family: 'Inter', sans-serif;
+    border-top: 1px solid var(--ft-border);
   }
 
   .footer-top {
@@ -21,17 +32,20 @@ const style = `
   }
 
   .footer-brand-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.4rem;
     font-weight: 700;
-    color: #C9A84C;
+    background: var(--ft-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
     margin-bottom: 14px;
-    letter-spacing: 0.5px;
+    letter-spacing: -0.3px;
   }
 
   .footer-brand-desc {
     font-size: 14px;
-    color: rgba(245,240,232,0.55);
+    color: var(--ft-text-dim);
     line-height: 1.75;
     font-weight: 300;
     max-width: 280px;
@@ -40,27 +54,28 @@ const style = `
 
   .footer-socials {
     display: flex;
-    gap: 14px;
+    gap: 12px;
   }
 
   .footer-social-link {
     width: 38px;
     height: 38px;
-    border-radius: 50%;
-    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 10px;
+    border: 1px solid var(--ft-border);
+    background: rgba(255,255,255,0.03);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(245,240,232,0.6);
+    color: var(--ft-text-dim);
     font-size: 15px;
     text-decoration: none;
     transition: all 0.2s;
   }
 
   .footer-social-link:hover {
-    border-color: #C9A84C;
-    color: #C9A84C;
-    background: rgba(201,168,76,0.08);
+    border-color: rgba(139,92,246,0.5);
+    color: #C4B5FD;
+    background: rgba(139,92,246,0.1);
     transform: translateY(-2px);
   }
 
@@ -68,8 +83,8 @@ const style = `
     font-size: 10px;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: #C9A84C;
-    font-weight: 500;
+    color: #C4B5FD;
+    font-weight: 600;
     margin-bottom: 24px;
   }
 
@@ -82,7 +97,7 @@ const style = `
 
   .footer-links a {
     font-size: 14px;
-    color: rgba(245,240,232,0.55);
+    color: var(--ft-text-dim);
     text-decoration: none;
     font-weight: 300;
     transition: color 0.2s, padding-left 0.2s;
@@ -90,7 +105,7 @@ const style = `
   }
 
   .footer-links a:hover {
-    color: #C9A84C;
+    color: #C4B5FD;
     padding-left: 4px;
   }
 
@@ -105,23 +120,23 @@ const style = `
     font-size: 10px;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: rgba(245,240,232,0.35);
+    color: var(--ft-text-faint);
     font-weight: 500;
   }
 
   .footer-contact-value {
     font-size: 14px;
-    color: rgba(245,240,232,0.7);
+    color: rgba(244,242,255,0.7);
     font-weight: 300;
     text-decoration: none;
     transition: color 0.2s;
   }
 
-  .footer-contact-value:hover { color: #C9A84C; }
+  .footer-contact-value:hover { color: #C4B5FD; }
 
   .footer-divider {
     border: none;
-    border-top: 1px solid rgba(201,168,76,0.1);
+    border-top: 1px solid var(--ft-border);
     margin: 0;
   }
 
@@ -138,12 +153,12 @@ const style = `
 
   .footer-copy {
     font-size: 12px;
-    color: rgba(245,240,232,0.3);
+    color: var(--ft-text-faint);
     font-weight: 300;
     letter-spacing: 0.3px;
   }
 
-  .footer-copy span { color: #C9A84C; }
+  .footer-copy span { color: #C4B5FD; }
 
   .footer-bottom-links {
     display: flex;
@@ -152,13 +167,13 @@ const style = `
 
   .footer-bottom-links a {
     font-size: 12px;
-    color: rgba(245,240,232,0.3);
+    color: var(--ft-text-faint);
     text-decoration: none;
     transition: color 0.2s;
     font-weight: 300;
   }
 
-  .footer-bottom-links a:hover { color: #C9A84C; }
+  .footer-bottom-links a:hover { color: #C4B5FD; }
 
   @media (max-width: 768px) {
     .footer-top {
