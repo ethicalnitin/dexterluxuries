@@ -415,11 +415,9 @@ export default function OrdersPage() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Derived stats — intentionally no all-time total, only recency signals ──
-  const now       = Date.now();
-  const lastHour  = orders.filter(o => o.createdAt && now - o.createdAt.toMillis() < 3_600_000);
-  const today     = orders.filter(o => o.createdAt && now - o.createdAt.toMillis() < 86_400_000);
-  const products  = [...new Set(orders.map(o => o.productName).filter(Boolean))].length;
+  // ── Derived stats — intentionally only a recency signal, nothing else ──
+  const now      = Date.now();
+  const lastHour = orders.filter(o => o.createdAt && now - o.createdAt.toMillis() < 3_600_000);
 
   return (
     <>
@@ -446,21 +444,11 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {/* ── Stats bar — no total count, by design ── */}
+          {/* ── Stats bar — only recency signal, no total count, no product count ── */}
           <div className="op-stats">
             <div className="op-stat">
               <div className="op-stat-number op-stat-hot">{lastHour.length}</div>
-              <div className="op-stat-label">Last Hour</div>
-            </div>
-            <div className="op-stat-div" />
-            <div className="op-stat">
-              <div className="op-stat-number">{today.length}</div>
-              <div className="op-stat-label">Today</div>
-            </div>
-            <div className="op-stat-div" />
-            <div className="op-stat">
-              <div className="op-stat-number">{products}</div>
-              <div className="op-stat-label">Products</div>
+              <div className="op-stat-label">Orders In The Last Hour</div>
             </div>
           </div>
 
@@ -522,7 +510,7 @@ export default function OrdersPage() {
               strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            All orders are verified and fulfilled by Dexter Luxuries
+            All orders are verified and fulfilled by ChartVault
           </div>
 
         </div>
