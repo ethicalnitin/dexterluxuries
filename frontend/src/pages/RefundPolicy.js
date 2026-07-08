@@ -142,7 +142,7 @@ const RefundPolicy = () => {
               Refund <span>Policy</span>
             </h1>
             <p className="refund-sub">
-              At <span className="highlight">Dexter Luxuries</span>, we take pride in delivering premium digital products.
+              At <span className="highlight">ChartVault</span>, we take pride in delivering premium digital products.
               Due to the nature of digital goods, all purchases are considered final.
             </p>
           </div>
@@ -207,7 +207,7 @@ const RefundPolicy = () => {
             </p>
 
             <p style={{ marginTop: "20px" }}>
-              Thank you for trusting <span className="highlight">Dexter Luxuries</span>.
+              Thank you for trusting <span className="highlight">ChartVault</span>.
             </p>
           </div>
 
