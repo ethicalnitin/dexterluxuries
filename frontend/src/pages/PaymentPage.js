@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 
 const WHATSAPP_NUMBER = "919289847981";
 
@@ -13,7 +13,7 @@ const PAYMENT_WINDOW_SECONDS = 10 * 60; // 10 minutes
 // "/api/deposit" is same-origin. If you ever split frontend/backend across
 // two hosts, set this to the backend's full origin instead, e.g.
 // "https://dexterluxuries.onrender.com".
-const API_BASE = ""; // <-- change this to your backend's origin if needed
+const API_BASE = "";
 // ─────────────────────────────────────────────────────────────────────────
 
 function getHashParams() {
@@ -61,6 +61,23 @@ export default function PaymentPage() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+
+  // ── Scroll fixes ─────────────────────────────────────────────────────
+  // The route uses a hash with query params (e.g. "#/payment?amount=..."),
+  // and some browsers treat anything after "#" as an anchor target and
+  // auto-scroll to it on load. Force the viewport back to the top before
+  // the first paint so the page never lands mid-scroll.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Every time the step changes (Pay → Confirm → Done), bring the top of
+  // the page back into view instead of leaving the scroll wherever the
+  // previous step happened to be — otherwise the new step's content (e.g.
+  // the confirmation form) can render below the fold.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
 
   useEffect(() => {
     return () => {
