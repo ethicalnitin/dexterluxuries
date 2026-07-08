@@ -1136,7 +1136,7 @@ const ProductPage = () => {
 
     const fetchProduct = async () => {
       try {
-        const apiBase = process.env.REACT_APP_API_BASE || "https://dexterluxuries.shop/api";
+        const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
         const response = await fetch(`${apiBase}/products/${id}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to fetch product");
@@ -1160,7 +1160,7 @@ const ProductPage = () => {
     if (!isTV) return;
 
     let cancelled = false;
-    const apiBase = process.env.REACT_APP_API_BASE || "https://dexterluxuries.shop/api";
+    const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
 
     const fetchPlanPrices = async () => {
       setPlanPricesLoading(true);
