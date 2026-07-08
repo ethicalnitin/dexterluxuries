@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap');
@@ -13,6 +13,7 @@ const style = `
     align-items: flex-end;
     gap: 10px;
     font-family: 'DM Sans', sans-serif;
+    transition: transform 0.25s ease;
   }
 
   /* ── TOOLTIP BUBBLE ── */
@@ -166,9 +167,50 @@ const style = `
   }
 `;
 
-const WhatsappButton = () => {
+/**
+ * Floating WhatsApp chat button.
+ *
+ * Self-detects any fixed bottom bar in the page (matched by
+ * `stickyBarSelector`, default `.pp-sticky-buybar`) and lifts itself above
+ * that bar's actual measured height, so it never overlaps — no matter how
+ * or where this component gets mounted. A `stickyBarVisible` prop is still
+ * accepted as a manual override/fallback if you'd rather drive it from
+ * parent state.
+ */
+const WhatsappButton = ({ stickyBarVisible = false, stickyBarSelector = '.pp-sticky-buybar' }) => {
   const phoneNumber = '919289847981'; // 🔴 Replace with your number (with country code, no +)
   const message = 'Hello! I am interested in your TradingView Premium plans. Can you share more details?';
+  const [barHeight, setBarHeight] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const bar = document.querySelector(stickyBarSelector);
+      setBarHeight(bar ? bar.offsetHeight : 0);
+    };
+
+    measure();
+
+    // Catch the bar appearing/disappearing (it's conditionally rendered).
+    const mo = new MutationObserver(measure);
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    // Catch its height changing (e.g. responsive layout shifts).
+    const ro = new ResizeObserver(measure);
+    const existingBar = document.querySelector(stickyBarSelector);
+    if (existingBar) ro.observe(existingBar);
+
+    window.addEventListener('resize', measure);
+
+    return () => {
+      mo.disconnect();
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [stickyBarSelector]);
+
+  // Measured height wins; the boolean prop is just a manual fallback lift
+  // for cases where the bar can't be found by selector.
+  const lift = barHeight > 0 ? barHeight + 14 : (stickyBarVisible ? 90 : 0);
 
   const handleClick = () => {
     const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
@@ -178,7 +220,10 @@ const WhatsappButton = () => {
   return (
     <>
       <style>{style}</style>
-      <div className="wa-wrapper">
+      <div
+        className="wa-wrapper"
+        style={lift ? { transform: `translateY(-${lift}px)` } : undefined}
+      >
 
         {/* Tooltip bubble */}
         <div className="wa-tooltip">
