@@ -1105,6 +1105,15 @@ const ProductPage = () => {
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [showFloatingHideBtn, setShowFloatingHideBtn] = useState(false);
 
+  // Countdown target: midnight tonight (00:00 the next calendar day), computed
+  // once via the lazy initializer so it stays fixed for the whole session
+  // instead of drifting on every render/refresh. Same target for everyone on
+  // a given day, and it naturally resets once the clock rolls past midnight.
+  const [countdownEnd] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+  });
+
   // Real per-plan prices, fetched from the backend. Keyed by plan id.
   // { "6": 999, "12": 1799, "18": 2999 }
   const [planPrices, setPlanPrices] = useState({});
@@ -1205,7 +1214,11 @@ const ProductPage = () => {
 
     const observer = new IntersectionObserver(
       ([entry]) => setShowFloatingHideBtn(entry.isIntersecting),
-      { threshold: 0 }
+      { threshold: 0 } // fire as soon as ANY part of the section is on screen —
+                        // ratio-based thresholds (e.g. 0.15) break once the
+                        // section grows huge after "Show 100+ more" is clicked,
+                        // because 15% of a very tall element is bigger than
+                        // one viewport and can never be satisfied again.
     );
     observer.observe(proofsSectionRef.current);
     return () => observer.disconnect();
@@ -1264,8 +1277,6 @@ const ProductPage = () => {
       </>
     );
   }
-
-  const countdownEnd = new Date(Date.now() + 3600000);
 
   // ── Real prices, taken directly from the product record ──────────────────────
   const displayPrice  = formatINR(product.price);
