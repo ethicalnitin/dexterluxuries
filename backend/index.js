@@ -76,6 +76,14 @@ async function sendTelegramPhoto(photoPath, caption) {
   await fetch(url, { method: "POST", body: form });
 }
 
+// Minimal HTML escaping so nothing a user types can break Telegram's HTML parse mode
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Health check
@@ -86,17 +94,18 @@ app.get('/health', (req, res) => {
 // Product routes
 app.use("/api/products", productRoutes);
 
-// POST /api/deposit — receive UTR + email + screenshot, forward to Telegram
+// POST /api/deposit — receive UTR + email/username + screenshot, forward to Telegram
 app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
-  const { utr, email, amount, method } = req.body;
+  const { utr, email, amount, method, productName, orderRef } = req.body;
   const screenshotFile = req.file;
 
   // ── Validation ──────────────────────────────────────────────────────────────
-  if (!utr || utr.trim().length < 6) {
-    return res.status(400).json({ error: "UTR must be at least 6 digits" });
+  // "email" doubles as email-or-username here, matching the frontend field.
+  if (!email || email.trim().length < 3) {
+    return res.status(400).json({ error: "Enter the email or username used at checkout" });
   }
-  if (!email || !email.includes("@")) {
-    return res.status(400).json({ error: "A valid email is required" });
+  if (!utr || utr.trim().length < 6) {
+    return res.status(400).json({ error: "UTR must be at least 6 characters" });
   }
   if (!screenshotFile) {
     return res.status(400).json({ error: "Payment screenshot is required" });
@@ -107,18 +116,23 @@ app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
   try {
     // ── Build Telegram caption ────────────────────────────────────────────────
     const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const caption =
-      `💰 <b>New Deposit Submission</b>\n\n` +
-      `📧 <b>Email:</b> ${email.trim()}\n` +
-      `🔑 <b>UTR:</b> <code>${utr.trim()}</code>\n` +
-      `💵 <b>Amount:</b> ₹${amount ? Number(amount).toLocaleString() : "Not specified"}\n` +
-      `📲 <b>Method:</b> ${method || "—"}\n` +
-      `🕐 <b>Time:</b> ${now}`;
+    const captionLines = [
+      `💰 <b>New Deposit Submission</b>`,
+      ``,
+      orderRef ? `🎫 <b>Order Ref:</b> <code>${escapeHtml(orderRef.trim())}</code>` : null,
+      productName ? `📦 <b>Product:</b> ${escapeHtml(productName.trim())}` : null,
+      `👤 <b>Email/Username:</b> ${escapeHtml(email.trim())}`,
+      `🔑 <b>UTR:</b> <code>${escapeHtml(utr.trim())}</code>`,
+      `💵 <b>Amount:</b> ₹${amount ? Number(amount).toLocaleString() : "Not specified"}`,
+      `📲 <b>Method:</b> ${escapeHtml(method || "—")}`,
+      `🕐 <b>Time:</b> ${now}`,
+    ].filter(Boolean);
+    const caption = captionLines.join("\n");
 
     // ── Send photo + caption to Telegram ──────────────────────────────────────
     await sendTelegramPhoto(screenshotPath, caption);
 
-    console.log(`[Deposit] Forwarded to Telegram — UTR: ${utr.trim()}, Email: ${email.trim()}`);
+    console.log(`[Deposit] Forwarded to Telegram — UTR: ${utr.trim()}, Email/Username: ${email.trim()}`);
 
     // ── Cleanup uploaded file ─────────────────────────────────────────────────
     fs.unlink(screenshotPath, () => {});
