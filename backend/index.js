@@ -19,6 +19,18 @@ const PORT = process.env.PORT || 3046;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID;
 
+// ── Self-ping config (Render free-tier keep-alive) ────────────────────────────
+// Set this to your deployed URL via env var instead of hardcoding it, so the
+// same code works across environments (staging/prod/local) without edits.
+const SELF_PING_URL = process.env.SELF_PING_URL || null;
+
+if (!MONGO_URL) {
+  console.error("[Startup] MONGO_URL is not set. Check your .env file.");
+}
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.warn("[Startup] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — Telegram notifications will be skipped.");
+}
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], credentials: true }));
 app.use(compression());
@@ -54,7 +66,7 @@ async function sendTelegramMessage(text) {
     return;
   }
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -63,17 +75,28 @@ async function sendTelegramMessage(text) {
       parse_mode: "HTML",
     }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[Telegram] sendMessage failed (${res.status}): ${body}`);
+  }
 }
 
 async function sendTelegramPhoto(photoPath, caption) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.warn("[Telegram] Bot token or chat ID not configured — skipping photo.");
+    return;
+  }
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
   const form = new FormData();
   form.append("chat_id", TELEGRAM_CHAT_ID);
   form.append("caption", caption, { contentType: "text/plain" });
   form.append("parse_mode", "HTML");
   form.append("photo", fs.createReadStream(photoPath));
-  await fetch(url, { method: "POST", body: form });
+  const res = await fetch(url, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[Telegram] sendPhoto failed (${res.status}): ${body}`);
+  }
 }
 
 // Minimal HTML escaping so nothing a user types can break Telegram's HTML parse mode
@@ -94,7 +117,56 @@ app.get('/health', (req, res) => {
 // Product routes
 app.use("/api/products", productRoutes);
 
+// POST /api/orders/notify — order intent (contact details + chosen payment
+// method) sent from the payment modal on ProductPage.js, BEFORE the buyer
+// actually pays. This is what was missing: ProductPage already calls this
+// endpoint, but index.js never defined it, so nothing reached Telegram.
+app.post('/api/orders/notify', async (req, res) => {
+  const { productId, productName, amount, email, phone, method } = req.body || {};
+
+  // ── Validation ──────────────────────────────────────────────────────────
+  if (!email || String(email).trim().length < 3) {
+    return res.status(400).json({ error: "Enter the email or username used at checkout" });
+  }
+  const phoneDigits = String(phone || "").replace(/\D/g, "");
+  if (!(phoneDigits.length === 10 || (phoneDigits.length === 12 && phoneDigits.startsWith("91")))) {
+    return res.status(400).json({ error: "Enter a valid phone number" });
+  }
+  if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+    return res.status(400).json({ error: "Invalid amount" });
+  }
+
+  try {
+    const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const captionLines = [
+      `🛒 <b>New Order Started</b>`,
+      ``,
+      productId ? `🆔 <b>Product ID:</b> <code>${escapeHtml(String(productId).trim())}</code>` : null,
+      productName ? `📦 <b>Product:</b> ${escapeHtml(String(productName).trim())}` : null,
+      `💵 <b>Amount:</b> ₹${Number(amount).toLocaleString()}`,
+      `👤 <b>Email/Username:</b> ${escapeHtml(String(email).trim())}`,
+      `📱 <b>Phone:</b> ${escapeHtml(String(phone).trim())}`,
+      `💳 <b>Method chosen:</b> ${escapeHtml(method || "—")}`,
+      `🕐 <b>Time:</b> ${now}`,
+    ].filter(Boolean);
+
+    await sendTelegramMessage(captionLines.join("\n"));
+
+    console.log(`[Order] Notified — Product: ${productName || productId}, Email/Phone: ${email.trim()}/${phone.trim()}, Method: ${method}`);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Order] notify error:", err.message);
+    // Don't fail the checkout flow hard on a Telegram hiccup — the frontend
+    // already treats this call as best-effort and proceeds to payment
+    // regardless. Still return 500 so it's visible in logs/monitoring.
+    res.status(500).json({ error: "Failed to notify order" });
+  }
+});
+
 // POST /api/deposit — receive UTR + email/username + screenshot, forward to Telegram
+// (this is the LATER step — after the buyer has actually paid — used by the
+// bank-transfer payment page.)
 app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
   const { utr, email, amount, method, productName, orderRef } = req.body;
   const screenshotFile = req.file;
@@ -145,6 +217,15 @@ app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
   }
 });
 
+// Multer errors (bad file type, too large, etc.) land here instead of crashing
+// the process or hanging the request.
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError || err.message === "Only image files are allowed") {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
+});
+
 // ─── Catch-all for React (must be last) ──────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
@@ -158,12 +239,15 @@ mongoose
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
 
-      // Self-ping every 5 mins (Render free tier keep-alive)
-      setInterval(() => {
-        fetch(`https://dexterluxuries.onrender.com/health`)
-          .then(() => console.log(`[${new Date().toLocaleTimeString()}] Self-ping OK`))
-          .catch(err => console.error("Self-ping failed:", err.message));
-      }, 5 * 60 * 1000);
+      // Self-ping every 5 mins (Render free tier keep-alive) — only runs if
+      // SELF_PING_URL is configured, so this doesn't spam errors locally.
+      if (SELF_PING_URL) {
+        setInterval(() => {
+          fetch(`${SELF_PING_URL}/health`)
+            .then(() => console.log(`[${new Date().toLocaleTimeString()}] Self-ping OK`))
+            .catch(err => console.error("Self-ping failed:", err.message));
+        }, 5 * 60 * 1000);
+      }
     });
   })
   .catch((err) => {
