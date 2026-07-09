@@ -2072,7 +2072,7 @@ const ProductPage = () => {
               <img src={product.image} alt={product.name} className="pp-product-img" />
             </div>
             <div className="pp-trust-row">
-              {["⚡ Instant Delivery","🔒 Secure Payment","♾️ Lifetime Access","🔄 Replacement Guarantee"].map(t => (
+              {["⚡ Fast Delivery","🔒 Secure Payment","♾️ Single Ownership","🔄 Replacement Guarantee"].map(t => (
                 <span key={t} className="pp-trust-pill">{t}</span>
               ))}
             </div>
