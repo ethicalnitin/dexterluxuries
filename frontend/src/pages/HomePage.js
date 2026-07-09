@@ -641,7 +641,7 @@ const HomePage = () => {
           <div className="hp-section-header">
             <span className="hp-section-eyebrow">Featured Products</span>
             <h2 className="hp-section-title">Handpicked digital gems</h2>
-            <p className="hp-section-sub">Instant delivery · lifetime access · updated weekly</p>
+            <p className="hp-section-sub">Fast delivery ·  Hottest Products · Updated weekly</p>
           </div>
 
           {loading ? (
