@@ -16,6 +16,68 @@ function formatINR(amount) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── UPI payment config ────────────────────────────────────────────────────────
+// TODO: replace with your real UPI ID (VPA) and payee/merchant display name
+// before going live. This is what actually receives the money.
+const UPI_VPA = "paytm.s2znhpg@pty";
+const UPI_PAYEE_NAME = "ChartVault";
+
+// Backend endpoint that receives the order details (email/username + phone +
+// amount) and relays them to your Telegram bot server-side. This MUST happen
+// on the backend — never call the Telegram Bot API directly from the browser,
+// since that would expose your bot token to anyone who opens devtools.
+// Expected contract: POST { productId, productName, amount, email, phone, method }
+// -> the backend forwards a formatted message to your Telegram chat via the
+// Bot API (https://api.telegram.org/bot<token>/sendMessage).
+function getNotifyEndpoint() {
+  const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
+  return `${apiBase}/orders/notify`;
+}
+
+// Builds a standard UPI deep link. On a phone this opens the user's UPI app
+// (GPay, PhonePe, Paytm, etc.) directly into a pre-filled payment screen.
+function buildUpiDeepLink({ amount, note }) {
+  const params = new URLSearchParams({
+    pa: UPI_VPA,                 // payee address (your UPI ID)
+    pn: UPI_PAYEE_NAME,          // payee name
+    am: String(amount),          // amount
+    cu: "INR",
+    tn: note || "Order payment", // transaction note
+  });
+  return `upi://pay?${params.toString()}`;
+}
+
+// WhatsApp number that both the "Pay with Bank Transfer" button and the
+// post-UPI-payment "Proceed to WhatsApp" button send buyers to.
+const WHATSAPP_NUMBER = "919289847981";
+
+// Builds a wa.me deep link with a pre-filled message describing the order.
+// `context` controls the wording: "bank" for a fresh bank-transfer request,
+// "upi-confirm" for a buyer confirming a UPI payment they already made.
+function buildWhatsAppLink({ amount, productName, context }) {
+  const price = formatINR(amount) || `₹${amount}`;
+  const text =
+    context === "upi-confirm"
+      ? `Hi, I've completed the UPI payment for ${productName} (${price}). Please confirm my order.`
+      : `Hi, I'd like to pay via bank transfer for ${productName} (${price}). Please share the bank details.`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+}
+
+function isValidEmailOrUsername(value) {
+  // Accept either an email address or a plain TradingView username (no spaces).
+  const v = (value || "").trim();
+  if (!v) return false;
+  const looksLikeEmail = /\S+@\S+\.\S+/.test(v);
+  const looksLikeUsername = /^\S{3,}$/.test(v);
+  return looksLikeEmail || looksLikeUsername;
+}
+
+function isValidIndianPhone(value) {
+  const digits = (value || "").replace(/\D/g, "");
+  return digits.length === 10 || (digits.length === 12 && digits.startsWith("91"));
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const style = `
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -1009,6 +1071,146 @@ const style = `
     .pp-sticky-timer-value { font-size: 12.5px; }
     .pp-floating-hide-btn { left: 16px; font-size: 12px; padding: 10px 16px; }
   }
+
+  /* ---------- Payment modal ---------- */
+  .pp-modal-overlay {
+    position: fixed; inset: 0; z-index: 2200;
+    background: rgba(5,5,10,0.82);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    animation: modalFadeIn 0.2s ease;
+  }
+  @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .pp-modal-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px 26px 24px;
+    position: relative;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+    animation: modalSlideUp 0.25s ease;
+  }
+  @keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .pp-modal-close {
+    position: absolute; top: 16px; right: 16px;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--white-dim);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    transition: background 0.2s;
+  }
+  .pp-modal-close:hover { background: rgba(139,92,246,0.2); }
+
+  .pp-modal-eyebrow {
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--violet-light);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .pp-modal-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+
+  .pp-modal-amount {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin: 10px 0 20px;
+  }
+
+  .pp-modal-field { margin-bottom: 14px; }
+  .pp-modal-label {
+    display: block;
+    font-size: 12px;
+    color: var(--white-dim);
+    font-weight: 400;
+    margin-bottom: 6px;
+    letter-spacing: 0.2px;
+  }
+  .pp-modal-input {
+    width: 100%;
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--white);
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+  }
+  .pp-modal-input:focus { border-color: var(--violet); }
+  .pp-modal-input::placeholder { color: rgba(244,242,255,0.32); }
+
+  .pp-modal-error {
+    font-size: 12.5px;
+    color: rgba(255,110,110,0.9);
+    margin: -4px 0 14px;
+  }
+
+  .pp-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .pp-modal-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px 18px;
+    border-radius: 10px;
+    font-size: 14.5px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+  .pp-modal-btn:hover { transform: translateY(-1px); }
+  .pp-modal-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  .pp-modal-btn--upi { background: var(--grad); color: #0A0A13; }
+  .pp-modal-btn--bank {
+    background: var(--surface);
+    color: var(--white);
+    border: 1px solid var(--border);
+  }
+
+  .pp-modal-note {
+    font-size: 11.5px;
+    color: var(--white-dim);
+    text-align: center;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
 `;
 
 const reviews = [
@@ -1801,6 +2003,7 @@ const dummyProofImages = [
     "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg",
     "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg"
   }
+  
 ];
 
 const PROOFS_PREVIEW_COUNT = 12;
@@ -1840,6 +2043,20 @@ const ProductPage = () => {
   // { "6": { price: 999, strikeThroughPrice: 1499 }, ... }
   const [planPrices, setPlanPrices] = useState({});
   const [planPricesLoading, setPlanPricesLoading] = useState(false);
+
+  // ── Payment modal state ─────────────────────────────────────────────────
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [modalOrder, setModalOrder] = useState(null); // { amount, productId, productName }
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [submittingMethod, setSubmittingMethod] = useState(null); // "upi" | "bank" | null
+  // Tracks the post-UPI-click "did the buyer leave and come back" flow: once
+  // they tap "Pay with UPI" we set upiInitiated, then watch for the tab
+  // becoming visible again (they've returned from their UPI app) to flip the
+  // button into "Proceed to WhatsApp".
+  const [upiInitiated, setUpiInitiated] = useState(false);
+  const [showUpiWhatsappCta, setShowUpiWhatsappCta] = useState(false);
 
   const { id } = useParams();
   const buyBtnAnchorRef = useRef(null);
@@ -1947,20 +2164,18 @@ const ProductPage = () => {
     return () => observer.disconnect();
   }, [product, isLoading, proofsHidden]);
 
+  // Buy Now no longer navigates straight to the payment page — it opens the
+  // payment modal (amount + contact details + UPI/bank choice) instead.
   const handleBuyNowClick = () => {
     if (!product || typeof product.price === "undefined") {
       alert("Error: Could not retrieve product details. Please try again later.");
       return;
     }
-    const encodedProductName = encodeURIComponent(product.name || "Product");
-    // Pass the real INR price straight through
-    const paymentUrl = `${window.location.origin}/#/payment?amount=${product.price}&productId=${id}&productName=${encodedProductName}`;
-    window.location.href = paymentUrl;
+    openPaymentModal({ amount: product.price, productId: id, productName: product.name || "Product" });
   };
 
-  // TradingView-style: "Buy Now" now goes straight to the payment page for
-  // the selected plan, using that plan's real fetched price — no more
-  // detour through the plan's own product page.
+  // TradingView-style: "Buy Now" opens the same payment modal, using the
+  // selected plan's real fetched price.
   const handleTradingViewBuyNowClick = () => {
     const plan = tradingViewPlans.find(p => p.id === selectedPlanId);
     const price = planPrices[selectedPlanId]?.price;
@@ -1970,9 +2185,120 @@ const ProductPage = () => {
       return;
     }
 
-    const encodedProductName = encodeURIComponent(`${product?.name || "Product"} — ${plan.duration}`);
-    const paymentUrl = `${window.location.origin}/#/payment?amount=${price}&productId=${plan.id}&productName=${encodedProductName}`;
-    window.location.href = paymentUrl;
+    openPaymentModal({
+      amount: price,
+      productId: plan.id,
+      productName: `${product?.name || "Product"} — ${plan.duration}`,
+    });
+  };
+
+  const openPaymentModal = (order) => {
+    setModalOrder(order);
+    setContactEmail("");
+    setContactPhone("");
+    setModalError("");
+    setSubmittingMethod(null);
+    setUpiInitiated(false);
+    setShowUpiWhatsappCta(false);
+    setShowPaymentModal(true);
+  };
+
+  const closePaymentModal = () => {
+    if (submittingMethod) return; // don't let them close mid-submit
+    setShowPaymentModal(false);
+    setModalOrder(null);
+    setUpiInitiated(false);
+    setShowUpiWhatsappCta(false);
+  };
+
+  // Once the buyer has tapped "Pay with UPI" (upiInitiated), watch for them
+  // returning to this tab — that's our signal they've been over to their UPI
+  // app and (hopefully) finished paying. When they come back, flip the UPI
+  // button into "Proceed to WhatsApp" so they can go confirm the order.
+  useEffect(() => {
+    if (!showPaymentModal || !upiInitiated) return;
+
+    const handleReturn = () => {
+      if (document.visibilityState === "visible") {
+        setShowUpiWhatsappCta(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleReturn);
+    window.addEventListener("focus", handleReturn); // fallback for in-app webviews
+    return () => {
+      document.removeEventListener("visibilitychange", handleReturn);
+      window.removeEventListener("focus", handleReturn);
+    };
+  }, [showPaymentModal, upiInitiated]);
+
+  // Sends the buyer straight to WhatsApp — used for bank transfer (always)
+  // and for the "Proceed to WhatsApp" state of the UPI button (after they've
+  // already paid and come back to the tab).
+  const goToWhatsApp = (context) => {
+    if (!modalOrder) return;
+    const link = buildWhatsAppLink({
+      amount: modalOrder.amount,
+      productName: modalOrder.productName,
+      context,
+    });
+    window.location.href = link;
+  };
+
+  // Validates the contact fields, notifies the backend (which relays the
+  // order to Telegram), then either fires the UPI deep link or sends the
+  // buyer straight to WhatsApp for bank transfer.
+  const submitPayment = async (method) => {
+    if (!modalOrder) return;
+
+    if (!isValidEmailOrUsername(contactEmail)) {
+      setModalError("Please enter a valid email or TradingView username.");
+      return;
+    }
+    if (!isValidIndianPhone(contactPhone)) {
+      setModalError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    setModalError("");
+    setSubmittingMethod(method);
+
+    const orderPayload = {
+      productId: modalOrder.productId,
+      productName: modalOrder.productName,
+      amount: modalOrder.amount,
+      email: contactEmail.trim(),
+      phone: contactPhone.trim(),
+      method,
+    };
+
+    try {
+      await fetch(getNotifyEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload),
+      });
+    } catch (err) {
+      // Don't block the payment flow on a notify failure — the buyer still
+      // needs to be able to pay. Just log it for now.
+      console.error("Failed to notify backend of order:", err);
+    }
+
+    if (method === "upi") {
+      const upiLink = buildUpiDeepLink({
+        amount: modalOrder.amount,
+        note: `${modalOrder.productName} - ${id}`,
+      });
+      setUpiInitiated(true);
+      window.location.href = upiLink;
+      // Give the deep link a brief moment to hand off to the UPI app before
+      // resetting the button state (in case it doesn't leave the page, e.g.
+      // on desktop where no UPI app is installed).
+      setTimeout(() => setSubmittingMethod(null), 2500);
+    } else {
+      // Bank transfer now goes straight to WhatsApp instead of a separate
+      // payment page.
+      goToWhatsApp("bank");
+    }
   };
 
   // Compact renderer used for the countdown chip inside the sticky Buy Now
@@ -2333,6 +2659,88 @@ const ProductPage = () => {
           >
             Buy Now <span className="pp-btn-arrow">→</span>
           </button>
+        </div>
+      )}
+
+      {/* ---------- UPI / Bank payment modal ---------- */}
+      {showPaymentModal && modalOrder && (
+        <div className="pp-modal-overlay" onClick={closePaymentModal}>
+          <div className="pp-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="pp-modal-close"
+              onClick={closePaymentModal}
+              aria-label="Close"
+              disabled={!!submittingMethod}
+            >
+              ✕
+            </button>
+
+            <span className="pp-modal-eyebrow">Complete Your Order</span>
+            <div className="pp-modal-title">{modalOrder.productName}</div>
+            <div className="pp-modal-amount">{formatINR(modalOrder.amount)}</div>
+
+            <div className="pp-modal-field">
+              <label className="pp-modal-label" htmlFor="pp-modal-email">
+                Email / TradingView username
+              </label>
+              <input
+                id="pp-modal-email"
+                className="pp-modal-input"
+                type="text"
+                placeholder="you@example.com or tv_username"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                disabled={!!submittingMethod}
+              />
+            </div>
+
+            <div className="pp-modal-field">
+              <label className="pp-modal-label" htmlFor="pp-modal-phone">
+                Phone number
+              </label>
+              <input
+                id="pp-modal-phone"
+                className="pp-modal-input"
+                type="tel"
+                placeholder="10-digit mobile number"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                disabled={!!submittingMethod}
+              />
+            </div>
+
+            {modalError && <p className="pp-modal-error">{modalError}</p>}
+
+            <div className="pp-modal-actions">
+              <button
+                type="button"
+                className="pp-modal-btn pp-modal-btn--upi"
+                onClick={() => (showUpiWhatsappCta ? goToWhatsApp("upi-confirm") : submitPayment("upi"))}
+                disabled={!!submittingMethod}
+              >
+                {showUpiWhatsappCta
+                  ? "Proceed to WhatsApp"
+                  : submittingMethod === "upi"
+                  ? "Opening UPI app…"
+                  : "Pay with UPI"}
+              </button>
+              <button
+                type="button"
+                className="pp-modal-btn pp-modal-btn--bank"
+                onClick={() => submitPayment("bank")}
+                disabled={!!submittingMethod}
+              >
+                {submittingMethod === "bank" ? "Redirecting…" : "Pay with Bank Transfer"}
+              </button>
+            </div>
+
+            <p className="pp-modal-note">
+              {showUpiWhatsappCta
+                ? "Tap \"Proceed to WhatsApp\" to confirm your payment and get your order delivered."
+                : "\"Pay with UPI\" opens your UPI app directly with the amount pre-filled. Your details are used only to confirm and deliver this order."}
+            </p>
+          </div>
         </div>
       )}
 
