@@ -34,9 +34,23 @@ function getNotifyEndpoint() {
   return `${apiBase}/orders/notify`;
 }
 
-// Builds a standard UPI deep link. On a phone this opens the user's UPI app
-// (GPay, PhonePe, Paytm, etc.) directly into a pre-filled payment screen.
-function buildUpiDeepLink({ amount, note }) {
+// ── App-specific UPI deep links ───────────────────────────────────────────────
+// A plain `upi://pay?...` link hands the choice of which app opens to the
+// phone's OS, which will happily launch whatever it thinks is the "default"
+// UPI handler (WhatsApp Pay, in your case) instead of asking. To let the
+// buyer pick a specific app, we use each app's own custom URI scheme —
+// Google Pay, PhonePe, and Paytm all accept the same standard UPI query
+// params, they just listen on a different scheme. "Other UPI Apps" falls
+// back to the generic upi://pay link, which triggers the normal Android
+// chooser sheet.
+const UPI_APP_SCHEMES = {
+  gpay: "tez://upi/pay",
+  phonepe: "phonepe://pay",
+  paytm: "paytmmp://pay",
+  upi: "upi://pay",
+};
+
+function buildAppUpiDeepLink(appId, { amount, note }) {
   const params = new URLSearchParams({
     pa: UPI_VPA,                 // payee address (your UPI ID)
     pn: UPI_PAYEE_NAME,          // payee name
@@ -44,8 +58,23 @@ function buildUpiDeepLink({ amount, note }) {
     cu: "INR",
     tn: note || "Order payment", // transaction note
   });
-  return `upi://pay?${params.toString()}`;
+  const scheme = UPI_APP_SCHEMES[appId] || UPI_APP_SCHEMES.upi;
+  return `${scheme}?${params.toString()}`;
 }
+
+// The UPI app picker shown in the payment modal. Icons are the official
+// brand marks (via the simple-icons CDN, rendered in each brand's real
+// color) rather than emoji, so the picker reads as a real payment method
+// selector rather than a placeholder. If an icon fails to load (offline,
+// CDN hiccup) the button falls back to a colored initial so it never shows
+// a broken-image glyph.
+const upiApps = [
+  { id: "gpay", name: "Google Pay", icon: "https://cdn.simpleicons.org/googlepay/4285F4", accent: "#4285F4" },
+  { id: "phonepe", name: "PhonePe", icon: "https://cdn.simpleicons.org/phonepe/5F259F", accent: "#5F259F" },
+  { id: "paytm", name: "Paytm", icon: "https://cdn.simpleicons.org/paytm/00BAF2", accent: "#00BAF2" },
+  { id: "upi", name: "Other UPI Apps", icon: "https://cdn.simpleicons.org/upi/097939", accent: "#097939" },
+];
+// ─────────────────────────────────────────────────────────────────────────────
 
 // WhatsApp number that both the "Pay with Bank Transfer" button and the
 // post-UPI-payment "Proceed to WhatsApp" button send buyers to.
@@ -395,7 +424,7 @@ const style = `
     border-radius: 6px;
   }
 
-  /* ---------- Plan selector (TradingView-style multi-duration products) ---------- */
+  /* ---------- Plan selector (multi-duration products) ---------- */
   .pp-plans {
     display: flex;
     flex-direction: column;
@@ -651,30 +680,90 @@ const style = `
   .pp-desc-empty { font-size: 14px; color: var(--white-dim); font-weight: 300; font-style: italic; }
   .pp-inline-error { font-size: 13px; color: rgba(255,100,100,0.8); font-weight: 300; margin-top: 12px; }
 
-  .pp-proofs-cta {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--violet-light);
-    font-size: 13.5px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    padding: 14px 20px;
-    border-radius: 10px;
-    cursor: pointer;
-    margin-top: 20px;
-    font-family: 'Inter', sans-serif;
-    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+/* ---------- "Show me proofs first" inline CTA (below plan selector) ----------
+   Deliberately loud: shimmering gradient background, a soft pulsing glow,
+   and a bouncing magnifier icon so it visually competes with — but doesn't
+   outrank — the primary Buy Now button right below it. */
+.pp-proofs-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 17px 22px;
+  margin-top: 4px;
+  margin-bottom: 16px;
+
+  background: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 50%, #8B5CF6 100%);
+  background-size: 220% 100%;
+
+  border: none;
+  border-radius: 14px;
+
+  color: #0A0A13;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+
+  cursor: pointer;
+  user-select: none;
+
+  animation:
+    proofsCtaShimmer 3.2s linear infinite,
+    proofsCtaPulse 2.4s ease-in-out infinite;
+
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+@keyframes proofsCtaShimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
+
+@keyframes proofsCtaPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgba(139, 92, 246, 0.45),
+      0 10px 28px rgba(139, 92, 246, 0.22);
   }
-  .pp-proofs-cta:hover {
-    background: rgba(139,92,246,0.1);
-    border-color: rgba(139,92,246,0.35);
-    transform: translateY(-1px);
+  50% {
+    box-shadow:
+      0 0 0 9px rgba(139, 92, 246, 0),
+      0 16px 40px rgba(139, 92, 246, 0.38);
   }
+}
+
+.pp-proofs-cta:hover {
+  transform: translateY(-3px) scale(1.012);
+  box-shadow:
+    0 0 0 0 rgba(139, 92, 246, 0.5),
+    0 18px 46px rgba(139, 92, 246, 0.4);
+}
+
+.pp-proofs-cta:active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+.pp-proofs-cta-icon {
+  font-size: 18px;
+  line-height: 1;
+  animation: proofsCtaIconBounce 1.5s ease-in-out infinite;
+}
+
+@keyframes proofsCtaIconBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(-10deg); }
+}
+
+.pp-proofs-cta-arrow {
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.22s ease;
+}
+
+.pp-proofs-cta:hover .pp-proofs-cta-arrow { transform: translateX(4px); }
 
   /* ---------- Shared section header ---------- */
   .pp-section {
@@ -850,6 +939,71 @@ const style = `
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* ---------- Persistent side "Proofs" tab ----------
+     Always docked to the right edge of the viewport whenever the proofs
+     section itself isn't on screen — a constant, eye-catching shortcut so
+     buyers can jump straight to delivery proof from anywhere on the page. */
+  .pp-floating-view-proofs-tab {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1850;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(160deg, #8B5CF6, #22D3EE);
+    background-size: 160% 160%;
+    color: #0A0A13;
+    border: none;
+    padding: 18px 10px;
+    border-radius: 14px 0 0 14px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    box-shadow:
+      -4px 0 0 rgba(139,92,246,0),
+      -10px 0 30px rgba(139,92,246,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.25);
+    animation:
+      proofsTabShimmer 3.5s linear infinite,
+      proofsTabGlow 2.4s ease-in-out infinite,
+      proofsTabFloatIn 0.3s ease;
+    transition: padding-right 0.2s ease, transform 0.2s ease;
+  }
+  .pp-floating-view-proofs-tab:hover {
+    padding-right: 18px;
+    transform: translateY(-50%) translateX(-2px);
+  }
+  .pp-floating-view-proofs-tab:active {
+    transform: translateY(-50%) scale(0.96);
+  }
+  .pp-floating-view-proofs-icon {
+    font-size: 18px;
+    line-height: 1;
+    animation: proofsCtaIconBounce 1.5s ease-in-out infinite;
+  }
+  .pp-floating-view-proofs-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+  @keyframes proofsTabShimmer {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 160% 160%; }
+  }
+  @keyframes proofsTabGlow {
+    0%, 100% { box-shadow: -10px 0 30px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.25); }
+    50% { box-shadow: -14px 0 44px rgba(139,92,246,0.65), inset 0 1px 0 rgba(255,255,255,0.35); }
+  }
+  @keyframes proofsTabFloatIn {
+    from { opacity: 0; transform: translateY(-50%) translateX(24px); }
+    to { opacity: 1; transform: translateY(-50%) translateX(0); }
+  }
+
   .pp-lightbox {
     position: fixed; inset: 0; z-index: 2000;
     background: rgba(5,5,10,0.92);
@@ -917,6 +1071,13 @@ const style = `
     font-weight: 700;
     color: var(--white);
     white-space: nowrap;
+  }
+  .pp-sticky-price-strike {
+    font-size: 11.5px;
+    color: var(--white-dim);
+    text-decoration: line-through;
+    font-weight: 300;
+    margin-right: 6px;
   }
   .pp-sticky-timer {
     display: flex;
@@ -1070,6 +1231,8 @@ const style = `
     .pp-sticky-timer { padding: 7px 9px; }
     .pp-sticky-timer-value { font-size: 12.5px; }
     .pp-floating-hide-btn { left: 16px; font-size: 12px; padding: 10px 16px; }
+    .pp-floating-view-proofs-tab { padding: 14px 8px; font-size: 10.5px; letter-spacing: 1.4px; }
+    .pp-floating-view-proofs-icon { font-size: 15px; }
   }
 
   /* ---------- Payment modal ---------- */
@@ -1179,6 +1342,98 @@ const style = `
     margin-top: 18px;
   }
 
+  /* ---------- UPI app picker ---------- */
+  .pp-modal-section-label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--white-dim);
+    font-weight: 600;
+    margin: 20px 0 10px;
+  }
+
+  .pp-upi-apps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pp-upi-app-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  }
+  .pp-upi-app-btn:hover {
+    border-color: rgba(139,92,246,0.4);
+    background: rgba(139,92,246,0.08);
+    transform: translateY(-1px);
+  }
+  .pp-upi-app-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+  .pp-upi-app-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .pp-upi-app-icon img { width: 20px; height: 20px; object-fit: contain; }
+  .pp-upi-app-icon-fallback {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: #0A0A13;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .pp-upi-app-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--white);
+  }
+
+  .pp-upi-app-arrow {
+    font-size: 15px;
+    color: var(--white-dim);
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .pp-upi-app-btn:hover .pp-upi-app-arrow { transform: translateX(3px); color: var(--violet-light); }
+
+  .pp-modal-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 4px;
+    color: var(--white-dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .pp-modal-divider::before, .pp-modal-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
   .pp-modal-btn {
     display: flex;
     align-items: center;
@@ -1197,11 +1452,12 @@ const style = `
   .pp-modal-btn:hover { transform: translateY(-1px); }
   .pp-modal-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-  .pp-modal-btn--upi { background: var(--grad); color: #0A0A13; }
+  .pp-modal-btn--upi { background: var(--grad); color: #0A0A13; margin-top: 4px; }
   .pp-modal-btn--bank {
     background: var(--surface);
     color: var(--white);
     border: 1px solid var(--border);
+    margin-top: 4px;
   }
 
   .pp-modal-note {
@@ -1243,779 +1499,197 @@ const faqItems = [
  * back to placeholders so the section always has content to show.
  */
 const dummyProofImages = [
-  {
-    "id": 1,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469334/proofs/fmvjx8nf4m0qkytv1tm9.jpg",
-    "label": "4965327411218590780.jpg"
-  },
-  {
-    "id": 2,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469340/proofs/lapgci9ggunou3ooyo4b.jpg",
-    "label": "4965327411218590781.jpg"
-  },
-  {
-    "id": 3,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469344/proofs/dljlnvnndba4h3kp8j97.jpg",
-    "label": "5010499051149437833.jpg"
-  },
-  {
-    "id": 4,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469348/proofs/edowg2cntli4p13akpdh.jpg",
-    "label": "5010499051149437834.jpg"
-  },
-  {
-    "id": 5,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469351/proofs/rwsickhxkeew0cta2ags.jpg",
-    "label": "5010499051149437835.jpg"
-  },
-  {
-    "id": 6,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469354/proofs/aaaiyotd3xqajabx1udk.jpg",
-    "label": "6066875063946303840.jpg"
-  },
-  {
-    "id": 7,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469355/proofs/lfyo6h6p4hemnjm6v30z.jpg",
-    "label": "6066875063946303841.jpg"
-  },
-  {
-    "id": 8,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469357/proofs/dzgygxhpqeuifm0ys4xg.jpg",
-    "label": "6066875063946303842.jpg"
-  },
-  {
-    "id": 9,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469359/proofs/igqrahru8hy01x722qsz.jpg",
-    "label": "6066875063946303845.jpg"
-  },
-  {
-    "id": 10,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469361/proofs/okzo2goo1rdugpafgszn.jpg",
-    "label": "6066875063946303846.jpg"
-  },
-  {
-    "id": 11,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469363/proofs/beq1c5ory4btbv2zyve0.jpg",
-    "label": "6066875063946303848.jpg"
-  },
-  {
-    "id": 12,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469364/proofs/gc23wfcnjhml5fiupvuk.jpg",
-    "label": "6066875063946303853.jpg"
-  },
-  {
-    "id": 13,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469366/proofs/izhegzwyq8tdh3yxalis.jpg",
-    "label": "6066875063946303854.jpg"
-  },
-  {
-    "id": 14,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469368/proofs/vwg4rjt7masyuneeioky.jpg",
-    "label": "6066875063946303858.jpg"
-  },
-  {
-    "id": 15,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469370/proofs/orefau6fvz4gwo04tl6y.jpg",
-    "label": "6066875063946303862.jpg"
-  },
-  {
-    "id": 16,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469372/proofs/skrzjtyu6xu1sc9xeewx.jpg",
-    "label": "6066875063946303863.jpg"
-  },
-  {
-    "id": 17,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469374/proofs/py97wyo9qsk2mufyyxrs.jpg",
-    "label": "6066875063946303864.jpg"
-  },
-  {
-    "id": 18,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469375/proofs/wc0vzrwusvju5pssipcx.jpg",
-    "label": "6066875063946303865.jpg"
-  },
-  {
-    "id": 19,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469377/proofs/gryk4w9bccjas115bvvm.jpg",
-    "label": "6087093317549536791.jpg"
-  },
-  {
-    "id": 20,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469379/proofs/pi6rqm0lqbqbnxmt7aib.jpg",
-    "label": "6087093317549536792.jpg"
-  },
-  {
-    "id": 21,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469381/proofs/rnzjj1j5ykn9clkggrkh.jpg",
-    "label": "6087093317549536793.jpg"
-  },
-  {
-    "id": 22,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469384/proofs/xatg9sjvcfiqrycg9kbx.jpg",
-    "label": "6087093317549536794.jpg"
-  },
-  {
-    "id": 23,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469387/proofs/hgidhrhrgazpjtpafcdr.jpg",
-    "label": "6087093317549536795.jpg"
-  },
-  {
-    "id": 24,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469389/proofs/ogwcn2puovjrvb97d4sn.jpg",
-    "label": "6087093317549536796.jpg"
-  },
-  {
-    "id": 25,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469391/proofs/a0qya4binyo2k5go9puu.jpg",
-    "label": "6087093317549536797.jpg"
-  },
-  {
-    "id": 26,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469393/proofs/x6t3hhwpu3exycrwi99l.jpg",
-    "label": "6095723483100199925.jpg"
-  },
-  {
-    "id": 27,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469395/proofs/c8yabvlemb0nisx9xaat.jpg",
-    "label": "6095723483100199926.jpg"
-  },
-  {
-    "id": 28,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469397/proofs/knltyik56mbf9ockuakf.jpg",
-    "label": "6095723483100199927.jpg"
-  },
-  {
-    "id": 29,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469401/proofs/m6nxmorpy14dy15umjnr.jpg",
-    "label": "6095723483100199928.jpg"
-  },
-  {
-    "id": 30,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469407/proofs/qwhve5hjuxxbngrcw2he.jpg",
-    "label": "6095723483100199929.jpg"
-  },
-  {
-    "id": 31,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469409/proofs/umosdw5lm4rwlfaaszps.jpg",
-    "label": "6095723483100199932.jpg"
-  },
-  {
-    "id": 32,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469412/proofs/blekmsqt4xhdmrmrns4p.jpg",
-    "label": "6095723483100199935.jpg"
-  },
-  {
-    "id": 33,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469415/proofs/qfdvbql67mvbee1dx0jz.jpg",
-    "label": "6095723483100199936.jpg"
-  },
-  {
-    "id": 34,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469417/proofs/d2jnrrvsjqlspj2maryi.jpg",
-    "label": "6095723483100199937.jpg"
-  },
-  {
-    "id": 35,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469419/proofs/kw5tnszsmzxonvybdxn1.jpg",
-    "label": "6102680325097372645.jpg"
-  },
-  {
-    "id": 36,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469420/proofs/lvolb9mwthgztgqyzrag.jpg",
-    "label": "6102680325097372646.jpg"
-  },
-  {
-    "id": 37,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469422/proofs/ohg3cm7jhhlnpwb9f7fg.jpg",
-    "label": "6102680325097372647.jpg"
-  },
-  {
-    "id": 38,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469425/proofs/mcahbeds7dfjjokswubs.jpg",
-    "label": "6248919615019266447.jpg"
-  },
-  {
-    "id": 39,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469427/proofs/icoljyzxeillzmyvdewx.jpg",
-    "label": "6248919615019266449.jpg"
-  },
-  {
-    "id": 40,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469429/proofs/j2mnyt1reogty1i7cdwl.jpg",
-    "label": "6253423214646636824.jpg"
-  },
-  {
-    "id": 41,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469431/proofs/qi8iychdfh5s4gssi9r6.jpg",
-    "label": "6253423214646636825.jpg"
-  },
-  {
-    "id": 42,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469433/proofs/oybl2pksvjddf1e4vtii.jpg",
-    "label": "6264694785084341909.jpg"
-  },
-  {
-    "id": 43,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469437/proofs/fyrhljj4ndjwbki3wbm8.jpg",
-    "label": "6276209583814981608.jpg"
-  },
-  {
-    "id": 44,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469439/proofs/ibfheetux6blo1nghk9q.jpg",
-    "label": "6276209583814981609 (1).jpg"
-  },
-  {
-    "id": 45,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469442/proofs/mfoqp1r2wm05nlmjxycb.jpg",
-    "label": "6276209583814981609.jpg"
-  },
-  {
-    "id": 46,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469444/proofs/bwsd6pz9uxmrqdhq9hj3.jpg",
-    "label": "6276209583814981610.jpg"
-  },
-  {
-    "id": 47,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469447/proofs/cxmmodaga7vang7qgrlm.jpg",
-    "label": "6276209583814981611.jpg"
-  },
-  {
-    "id": 48,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469449/proofs/z5n8u81ljy83b8vm19v8.jpg",
-    "label": "6276209583814981612.jpg"
-  },
-  {
-    "id": 49,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469451/proofs/nuxa25e6ii9oh9vxdzss.jpg",
-    "label": "IMG_20240829_032555_785.jpg"
-  },
-  {
-    "id": 50,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469452/proofs/sur7job6tppdqpjreann.jpg",
-    "label": "IMG_20240829_032610_415.jpg"
-  },
-  {
-    "id": 51,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469454/proofs/xkwf3qhuhvhz4z8blh2p.jpg",
-    "label": "IMG_20240829_032617_985.jpg"
-  },
-  {
-    "id": 52,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469456/proofs/mi67lixidhhqphrfw0bo.jpg",
-    "label": "IMG_20240829_032627_779.jpg"
-  },
-  {
-    "id": 53,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469458/proofs/lbwrtqs5uhiojiunxsgj.jpg",
-    "label": "IMG_20240829_032639_961.jpg"
-  },
-  {
-    "id": 54,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469460/proofs/qfcfeolxhfquqdsnbnpq.jpg",
-    "label": "IMG_20240829_032643_716.jpg"
-  },
-  {
-    "id": 55,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469462/proofs/rtg47rvsvbgvxfyjwkne.jpg",
-    "label": "IMG_20240829_032646_997.jpg"
-  },
-  {
-    "id": 56,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469465/proofs/pa4qpounbu2p6dm3ruir.jpg",
-    "label": "IMG_20240829_032650_209.jpg"
-  },
-  {
-    "id": 57,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469466/proofs/lvpw797dyhavv3vlptb7.jpg",
-    "label": "IMG_20240829_032657_219.jpg"
-  },
-  {
-    "id": 58,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469468/proofs/xyrcryvu3d71cz2agyzo.jpg",
-    "label": "IMG_20240829_032701_257.jpg"
-  },
-  {
-    "id": 59,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469470/proofs/mcyur70fsebxuabznoe8.jpg",
-    "label": "IMG_20240829_032704_854.jpg"
-  },
-  {
-    "id": 60,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469473/proofs/oxrv0occaqjcmu7un5ih.jpg",
-    "label": "IMG_20240829_032708_164.jpg"
-  },
-  {
-    "id": 61,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469475/proofs/lma8hw7adrs454fwvjys.jpg",
-    "label": "IMG_20240829_032715_213.jpg"
-  },
-  {
-    "id": 62,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469477/proofs/qixa5mx2irmdoc2dkjeg.jpg",
-    "label": "IMG_20240829_032725_315.jpg"
-  },
-  {
-    "id": 63,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469479/proofs/lxlrdrdyjnomyc8vvdou.jpg",
-    "label": "IMG_20240829_032729_506.jpg"
-  },
-  {
-    "id": 64,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469481/proofs/nqpf7mc5ryacasbwfufh.jpg",
-    "label": "IMG_20240829_032733_541.jpg"
-  },
-  {
-    "id": 65,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469483/proofs/wrcbbfybnhoqiwvz2ydl.jpg",
-    "label": "IMG_20240829_032744_498.jpg"
-  },
-  {
-    "id": 66,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469485/proofs/j45wppbdko5fq6i4drwu.jpg",
-    "label": "IMG_20240829_032748_020.jpg"
-  },
-  {
-    "id": 67,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469487/proofs/se09cl1w6t3qiaeg29kp.jpg",
-    "label": "IMG_20240829_032757_562.jpg"
-  },
-  {
-    "id": 68,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469489/proofs/jmxjnc0epdly8gvkflzz.jpg",
-    "label": "IMG_20240829_032804_641.jpg"
-  },
-  {
-    "id": 69,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469491/proofs/g22hkr3s18o0m6idg7ck.jpg",
-    "label": "IMG_20240829_032808_491.jpg"
-  },
-  {
-    "id": 70,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469493/proofs/bfv0svn0lt8mwrvz9jul.jpg",
-    "label": "IMG_20240829_032821_445.jpg"
-  },
-  {
-    "id": 71,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469495/proofs/ypf4crmiyw8my3fsmhdu.jpg",
-    "label": "IMG_20240829_032825_443.jpg"
-  },
-  {
-    "id": 72,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469497/proofs/awplv8lk4zcjtasvtava.jpg",
-    "label": "IMG_20240829_032837_071.jpg"
-  },
-  {
-    "id": 73,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469499/proofs/ynolkpkcm3vigeygcrg1.jpg",
-    "label": "IMG_20240829_032841_270.jpg"
-  },
-  {
-    "id": 74,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469501/proofs/flbyxhjg6vf1e6u1eqq9.jpg",
-    "label": "IMG_20240829_032843_640.jpg"
-  },
-  {
-    "id": 75,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469503/proofs/z38g1srtec0k3bi46nnf.jpg",
-    "label": "IMG_20240829_032847_082.jpg"
-  },
-  {
-    "id": 76,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469505/proofs/fstpptva9xjmhbgmrzui.jpg",
-    "label": "IMG_20240829_032850_981.jpg"
-  },
-  {
-    "id": 77,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469508/proofs/rpokoj6k12272thesdai.jpg",
-    "label": "IMG_20240829_032854_900.jpg"
-  },
-  {
-    "id": 78,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469510/proofs/ygluc7qvqlnio3jnbk8w.jpg",
-    "label": "IMG_20240829_032859_225.jpg"
-  },
-  {
-    "id": 79,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469512/proofs/tr81r1zkgi8sc9opg09c.jpg",
-    "label": "IMG_20240829_032902_829.jpg"
-  },
-  {
-    "id": 80,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469514/proofs/xcjkj9tr29gyhccqneuk.jpg",
-    "label": "IMG_20240829_032907_545.jpg"
-  },
-  {
-    "id": 81,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469518/proofs/yoniue6g2its5bsp5gvo.jpg",
-    "label": "IMG_20240829_032910_338.jpg"
-  },
-  {
-    "id": 82,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469520/proofs/v3qkxgmwnlraio0venhr.jpg",
-    "label": "IMG_20240829_032944_079.jpg"
-  },
-  {
-    "id": 83,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469522/proofs/xbgn170zqzepqr1xpz5c.jpg",
-    "label": "IMG_20240829_032947_814.jpg"
-  },
-  {
-    "id": 84,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469525/proofs/mipgnvvjwvv362uvd1ww.jpg",
-    "label": "IMG_20240829_032957_535.jpg"
-  },
-  {
-    "id": 85,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469528/proofs/qkjzc1voomb0s6jshafd.jpg",
-    "label": "IMG_20240829_033007_936.jpg"
-  },
-  {
-    "id": 86,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469530/proofs/hlbbftio2cyhzyt7oxqi.jpg",
-    "label": "IMG_20240829_033013_278.jpg"
-  },
-  {
-    "id": 87,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469532/proofs/xzzdsqcprl8fd628bzyr.jpg",
-    "label": "IMG_20240829_033036_547.jpg"
-  },
-  {
-    "id": 88,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469535/proofs/jzcdrhgrkoxusrwoknc8.jpg",
-    "label": "IMG_20240829_033040_147.jpg"
-  },
-  {
-    "id": 89,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469538/proofs/sfswwdj1kvwncs6qqocz.jpg",
-    "label": "IMG_20240829_033045_317.jpg"
-  },
-  {
-    "id": 90,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469540/proofs/qpn5xbc56xg7l7ri5hpg.jpg",
-    "label": "IMG_20240829_033051_252.jpg"
-  },
-  {
-    "id": 91,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469542/proofs/wspsw9brtdckl41ulmdn.jpg",
-    "label": "IMG_20240921_014757_873.jpg"
-  },
-  {
-    "id": 92,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469544/proofs/xn8hus0rkim4wgrsoqm0.jpg",
-    "label": "IMG_20240921_014759_230.jpg"
-  },
-  {
-    "id": 93,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469547/proofs/koplkwqixjigcr8r8ldc.jpg",
-    "label": "IMG_20240921_014759_965.jpg"
-  },
-  {
-    "id": 94,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469548/proofs/dllziy4aret49kikegvh.jpg",
-    "label": "IMG_20240921_014800_679.jpg"
-  },
-  {
-    "id": 95,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469551/proofs/eb9ehtqduyqpz0ltkwi9.jpg",
-    "label": "IMG_20240921_014801_814.jpg"
-  },
-  {
-    "id": 96,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469552/proofs/rsbu3atosvx9dfvcvxno.jpg",
-    "label": "IMG_20240921_014803_405.jpg"
-  },
-  {
-    "id": 97,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469556/proofs/qff2h7ten1v0gncxojde.jpg",
-    "label": "IMG_20240921_014803_886.jpg"
-  },
-  {
-    "id": 98,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469558/proofs/yp5mqhihsfdlzzd7eibs.jpg",
-    "label": "IMG_20240921_014805_874.jpg"
-  },
-  {
-    "id": 99,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469560/proofs/bi439iyyfwbnsttj5kyc.jpg",
-    "label": "IMG_20240921_014806_490.jpg"
-  },
-  {
-    "id": 100,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469561/proofs/ch0wxoxj3caws5tnte2y.jpg",
-    "label": "IMG_20240921_014807_239.jpg"
-  },
-  {
-    "id": 101,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469562/proofs/ixm3x0hnjiqeqcdsnj4s.jpg",
-    "label": "IMG_20240921_014808_621.jpg"
-  },
-  {
-    "id": 102,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469565/proofs/jddzpxsfy54ovzmhpya2.jpg",
-    "label": "IMG_20240921_014810_166.jpg"
-  },
-  {
-    "id": 103,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469566/proofs/hewxm2xj33riwnmulf0f.jpg",
-    "label": "IMG_20240921_014810_877.jpg"
-  },
-  {
-    "id": 104,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469569/proofs/xkfqfsemfnajq4jlpozz.jpg",
-    "label": "IMG_20240921_014811_603.jpg"
-  },
-  {
-    "id": 105,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469570/proofs/da1spja4ihnrrsxekwtv.jpg",
-    "label": "IMG_20240921_014813_979.jpg"
-  },
-  {
-    "id": 106,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469572/proofs/xs49zch4h7jbbtgxuicm.jpg",
-    "label": "IMG_20240921_014814_858.jpg"
-  },
-  {
-    "id": 107,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469574/proofs/dp3h6nshtpzfb9qpag3u.jpg",
-    "label": "IMG_20240921_014816_986.jpg"
-  },
-  {
-    "id": 108,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469575/proofs/l3wbcszalmblvqi13jlj.jpg",
-    "label": "IMG_20240921_014817_855.jpg"
-  },
-  {
-    "id": 109,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469581/proofs/jwq9xxiw2tocavhqy2br.jpg",
-    "label": "IMG_20240921_014818_951.jpg"
-  },
-  {
-    "id": 110,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469582/proofs/o9o7donkctrapwxql3vs.jpg",
-    "label": "IMG_20240921_014820_250.jpg"
-  },
-  {
-    "id": 111,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469584/proofs/dwksjero6ffcpyk24fr1.jpg",
-    "label": "IMG_20240921_014822_026.jpg"
-  },
-  {
-    "id": 112,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469586/proofs/bhjstrolb5oyw6svxrxo.jpg",
-    "label": "IMG_20240921_014822_409.jpg"
-  },
-  {
-    "id": 113,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469587/proofs/ak8fz13een25a0liu8tj.jpg",
-    "label": "IMG_20240921_014823_457.jpg"
-  },
-  {
-    "id": 114,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469592/proofs/fzupt7a2xobxyi5x7o5z.jpg",
-    "label": "IMG_20240921_014825_600.jpg"
-  },
-  {
-    "id": 115,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469594/proofs/z9yt3vylzq6hyhyepvtp.jpg",
-    "label": "IMG_20240921_014827_215.jpg"
-  },
-  {
-    "id": 116,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469596/proofs/gmfvxohcbq3r94iy9hap.jpg",
-    "label": "IMG_20240921_015129_109.jpg"
-  },
-  {
-    "id": 117,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469599/proofs/agqmlnhomcprqshz39b5.jpg",
-    "label": "IMG_20240921_015131_212.jpg"
-  },
-  {
-    "id": 118,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469602/proofs/rrs4wgnpasjd5o8ddroc.jpg",
-    "label": "IMG_20240921_015131_989.jpg"
-  },
-  {
-    "id": 119,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469604/proofs/ulmthniyg5mwnk62losb.jpg",
-    "label": "IMG_20240921_015133_615.jpg"
-  },
-  {
-    "id": 120,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469606/proofs/h5bhrpkj1i4vpbba15ut.jpg",
-    "label": "IMG_20240921_015135_076.jpg"
-  },
-  {
-    "id": 121,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469608/proofs/rwaqwa1nhewg2amvsryd.jpg",
-    "label": "IMG_20240921_015136_289.jpg"
-  },
-  {
-    "id": 122,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469613/proofs/sndmk0c3mglpj8jaqsbw.jpg",
-    "label": "IMG_20240921_015138_829.jpg"
-  },
-  {
-    "id": 123,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469615/proofs/etrkrucnmqpgs2hyu3j9.jpg",
-    "label": "IMG_20240921_015140_209.jpg"
-  },
-  {
-    "id": 124,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469616/proofs/n069fx6bokusp02vwief.jpg",
-    "label": "IMG_20240921_015141_402.jpg"
-  },
-  {
-    "id": 125,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469618/proofs/adnqyd8xhnocexyvi3nz.jpg",
-    "label": "IMG_20240921_015142_096.jpg"
-  },
-  {
-    "id": 126,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469620/proofs/rmgo4vskq1srwmkpgwe4.jpg",
-    "label": "IMG_20240921_015144_075.jpg"
-  },
-  {
-    "id": 127,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469621/proofs/a9kvdtxg5ycsuixjtaaw.jpg",
-    "label": "IMG_20240921_015145_716.jpg"
-  },
-  {
-    "id": 128,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469623/proofs/voyfsisteribccfrkjxs.jpg",
-    "label": "IMG_20240921_015149_108.jpg"
-  },
-  {
-    "id": 129,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469624/proofs/xryptdz8uosxjkxuvp8h.jpg",
-    "label": "IMG_20240921_015150_914.jpg"
-  },
-  {
-    "id": 130,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469625/proofs/lyzth99bbaecfw15ss0z.jpg",
-    "label": "IMG_20240921_015151_365.jpg"
-  },
-  {
-    "id": 131,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469628/proofs/qfrqp0x9t8kfhw5ori3x.jpg",
-    "label": "IMG_20240921_015153_505.jpg"
-  },
-  {
-    "id": 132,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469630/proofs/eoryforijcytszzkjut9.jpg",
-    "label": "IMG_20240921_015155_102.jpg"
-  },
-  {
-    "id": 133,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469631/proofs/h1ljx3u6qrmhds58nwbg.jpg",
-    "label": "IMG_20240921_015157_538.jpg"
-  },
-  {
-    "id": 134,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469633/proofs/y0g4admi8ryjwn99p94u.jpg",
-    "label": "IMG_20240921_015158_990.jpg"
-  },
-  {
-    "id": 135,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469637/proofs/xkwtjh4g5fxzh0svk5lq.jpg",
-    "label": "IMG_20240921_015200_281.jpg"
-  },
-  {
-    "id": 136,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469638/proofs/w8wwvj7itfyuix3aj4wb.jpg",
-    "label": "IMG_20240921_015201_771.jpg"
-  },
-  {
-    "id": 137,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469640/proofs/wdbwajvkgdevu0wse6oe.jpg",
-    "label": "IMG_20240921_015203_836.jpg"
-  },
-  {
-    "id": 138,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469642/proofs/bfr6qge4ov4xniawgunh.jpg",
-    "label": "IMG_20240921_015204_982.jpg"
-  },
-  {
-    "id": 139,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469643/proofs/ypahf4ten9oah1qzywub.jpg",
-    "label": "IMG_20240921_015206_341.jpg"
-  },
-  {
-    "id": 140,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469647/proofs/in0k0saiveflrjng04op.jpg",
-    "label": "IMG_20240921_015207_833.jpg"
-  },
-  {
-    "id": 141,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469650/proofs/j98d8gy0kto29vdk0h4h.jpg",
-    "label": "IMG_20240921_015209_121.jpg"
-  },
-  {
-    "id": 142,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469652/proofs/lvsxs6swlwdrjb5sre5w.jpg",
-    "label": "IMG_20240921_015210_421.jpg"
-  },
-  {
-    "id": 143,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469654/proofs/ekj8zhq0yz8kxn0l2vjo.jpg",
-    "label": "IMG_20240921_015212_135.jpg"
-  },
-  {
-    "id": 144,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469656/proofs/lwupvqjq4uxc0bxg4e7e.jpg",
-    "label": "IMG_20240921_015212_851.jpg"
-  },
-  {
-    "id": 145,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469658/proofs/puvkn0dexa35bcypvaw4.jpg",
-    "label": "IMG_20240921_015214_146.jpg"
-  },
-  {
-    "id": 146,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469660/proofs/hszbfrovu4swu45dr93v.jpg",
-    "label": "IMG_20240921_015215_188.jpg"
-  },
-  {
-    "id": 147,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469661/proofs/gpmfkh8pppuqopl3wmgx.jpg",
-    "label": "IMG_20240921_015217_651.jpg"
-  },
-  {
-    "id": 148,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469664/proofs/xwjg7jqrptbsxekeou1r.jpg",
-    "label": "IMG_20240921_015218_449.jpg"
-  },
-  {
-    "id": 149,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469666/proofs/muxt6qmqofezvfkqifls.jpg",
-    "label": "IMG_20240921_015219_844.jpg"
-  },
-  {
-    "id": 150,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469668/proofs/awdtfsw09onj47wtrw4s.jpg",
-    "label": "IMG_20240921_015225_765.jpg"
-  },
-  {
-    "id": 151,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469671/proofs/r8yjb9r8vsjf1qqpk0kx.jpg",
-    "label": "IMG_20240921_015227_341.jpg"
-  },
-  {
-    "id": 152,
-    "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg",
-    "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg"
-  }
-  
+  { "id": 1, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469334/proofs/fmvjx8nf4m0qkytv1tm9.jpg", "label": "4965327411218590780.jpg" },
+  { "id": 2, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469340/proofs/lapgci9ggunou3ooyo4b.jpg", "label": "4965327411218590781.jpg" },
+  { "id": 3, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469344/proofs/dljlnvnndba4h3kp8j97.jpg", "label": "5010499051149437833.jpg" },
+  { "id": 4, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469348/proofs/edowg2cntli4p13akpdh.jpg", "label": "5010499051149437834.jpg" },
+  { "id": 5, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469351/proofs/rwsickhxkeew0cta2ags.jpg", "label": "5010499051149437835.jpg" },
+  { "id": 6, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469354/proofs/aaaiyotd3xqajabx1udk.jpg", "label": "6066875063946303840.jpg" },
+  { "id": 7, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469355/proofs/lfyo6h6p4hemnjm6v30z.jpg", "label": "6066875063946303841.jpg" },
+  { "id": 8, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469357/proofs/dzgygxhpqeuifm0ys4xg.jpg", "label": "6066875063946303842.jpg" },
+  { "id": 9, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469359/proofs/igqrahru8hy01x722qsz.jpg", "label": "6066875063946303845.jpg" },
+  { "id": 10, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469361/proofs/okzo2goo1rdugpafgszn.jpg", "label": "6066875063946303846.jpg" },
+  { "id": 11, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469363/proofs/beq1c5ory4btbv2zyve0.jpg", "label": "6066875063946303848.jpg" },
+  { "id": 12, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469364/proofs/gc23wfcnjhml5fiupvuk.jpg", "label": "6066875063946303853.jpg" },
+  { "id": 13, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469366/proofs/izhegzwyq8tdh3yxalis.jpg", "label": "6066875063946303854.jpg" },
+  { "id": 14, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469368/proofs/vwg4rjt7masyuneeioky.jpg", "label": "6066875063946303858.jpg" },
+  { "id": 15, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469370/proofs/orefau6fvz4gwo04tl6y.jpg", "label": "6066875063946303862.jpg" },
+  { "id": 16, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469372/proofs/skrzjtyu6xu1sc9xeewx.jpg", "label": "6066875063946303863.jpg" },
+  { "id": 17, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469374/proofs/py97wyo9qsk2mufyyxrs.jpg", "label": "6066875063946303864.jpg" },
+  { "id": 18, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469375/proofs/wc0vzrwusvju5pssipcx.jpg", "label": "6066875063946303865.jpg" },
+  { "id": 19, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469377/proofs/gryk4w9bccjas115bvvm.jpg", "label": "6087093317549536791.jpg" },
+  { "id": 20, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469379/proofs/pi6rqm0lqbqbnxmt7aib.jpg", "label": "6087093317549536792.jpg" },
+  { "id": 21, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469381/proofs/rnzjj1j5ykn9clkggrkh.jpg", "label": "6087093317549536793.jpg" },
+  { "id": 22, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469384/proofs/xatg9sjvcfiqrycg9kbx.jpg", "label": "6087093317549536794.jpg" },
+  { "id": 23, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469387/proofs/hgidhrhrgazpjtpafcdr.jpg", "label": "6087093317549536795.jpg" },
+  { "id": 24, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469389/proofs/ogwcn2puovjrvb97d4sn.jpg", "label": "6087093317549536796.jpg" },
+  { "id": 25, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469391/proofs/a0qya4binyo2k5go9puu.jpg", "label": "6087093317549536797.jpg" },
+  { "id": 26, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469393/proofs/x6t3hhwpu3exycrwi99l.jpg", "label": "6095723483100199925.jpg" },
+  { "id": 27, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469395/proofs/c8yabvlemb0nisx9xaat.jpg", "label": "6095723483100199926.jpg" },
+  { "id": 28, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469397/proofs/knltyik56mbf9ockuakf.jpg", "label": "6095723483100199927.jpg" },
+  { "id": 29, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469401/proofs/m6nxmorpy14dy15umjnr.jpg", "label": "6095723483100199928.jpg" },
+  { "id": 30, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469407/proofs/qwhve5hjuxxbngrcw2he.jpg", "label": "6095723483100199929.jpg" },
+  { "id": 31, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469409/proofs/umosdw5lm4rwlfaaszps.jpg", "label": "6095723483100199932.jpg" },
+  { "id": 32, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469412/proofs/blekmsqt4xhdmrmrns4p.jpg", "label": "6095723483100199935.jpg" },
+  { "id": 33, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469415/proofs/qfdvbql67mvbee1dx0jz.jpg", "label": "6095723483100199936.jpg" },
+  { "id": 34, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469417/proofs/d2jnrrvsjqlspj2maryi.jpg", "label": "6095723483100199937.jpg" },
+  { "id": 35, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469419/proofs/kw5tnszsmzxonvybdxn1.jpg", "label": "6102680325097372645.jpg" },
+  { "id": 36, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469420/proofs/lvolb9mwthgztgqyzrag.jpg", "label": "6102680325097372646.jpg" },
+  { "id": 37, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469422/proofs/ohg3cm7jhhlnpwb9f7fg.jpg", "label": "6102680325097372647.jpg" },
+  { "id": 38, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469425/proofs/mcahbeds7dfjjokswubs.jpg", "label": "6248919615019266447.jpg" },
+  { "id": 39, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469427/proofs/icoljyzxeillzmyvdewx.jpg", "label": "6248919615019266449.jpg" },
+  { "id": 40, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469429/proofs/j2mnyt1reogty1i7cdwl.jpg", "label": "6253423214646636824.jpg" },
+  { "id": 41, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469431/proofs/qi8iychdfh5s4gssi9r6.jpg", "label": "6253423214646636825.jpg" },
+  { "id": 42, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469433/proofs/oybl2pksvjddf1e4vtii.jpg", "label": "6264694785084341909.jpg" },
+  { "id": 43, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469437/proofs/fyrhljj4ndjwbki3wbm8.jpg", "label": "6276209583814981608.jpg" },
+  { "id": 44, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469439/proofs/ibfheetux6blo1nghk9q.jpg", "label": "6276209583814981609 (1).jpg" },
+  { "id": 45, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469442/proofs/mfoqp1r2wm05nlmjxycb.jpg", "label": "6276209583814981609.jpg" },
+  { "id": 46, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469444/proofs/bwsd6pz9uxmrqdhq9hj3.jpg", "label": "6276209583814981610.jpg" },
+  { "id": 47, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469447/proofs/cxmmodaga7vang7qgrlm.jpg", "label": "6276209583814981611.jpg" },
+  { "id": 48, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469449/proofs/z5n8u81ljy83b8vm19v8.jpg", "label": "6276209583814981612.jpg" },
+  { "id": 49, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469451/proofs/nuxa25e6ii9oh9vxdzss.jpg", "label": "IMG_20240829_032555_785.jpg" },
+  { "id": 50, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469452/proofs/sur7job6tppdqpjreann.jpg", "label": "IMG_20240829_032610_415.jpg" },
+  { "id": 51, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469454/proofs/xkwf3qhuhvhz4z8blh2p.jpg", "label": "IMG_20240829_032617_985.jpg" },
+  { "id": 52, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469456/proofs/mi67lixidhhqphrfw0bo.jpg", "label": "IMG_20240829_032627_779.jpg" },
+  { "id": 53, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469458/proofs/lbwrtqs5uhiojiunxsgj.jpg", "label": "IMG_20240829_032639_961.jpg" },
+  { "id": 54, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469460/proofs/qfcfeolxhfquqdsnbnpq.jpg", "label": "IMG_20240829_032643_716.jpg" },
+  { "id": 55, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469462/proofs/rtg47rvsvbgvxfyjwkne.jpg", "label": "IMG_20240829_032646_997.jpg" },
+  { "id": 56, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469465/proofs/pa4qpounbu2p6dm3ruir.jpg", "label": "IMG_20240829_032650_209.jpg" },
+  { "id": 57, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469466/proofs/lvpw797dyhavv3vlptb7.jpg", "label": "IMG_20240829_032657_219.jpg" },
+  { "id": 58, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469468/proofs/xyrcryvu3d71cz2agyzo.jpg", "label": "IMG_20240829_032701_257.jpg" },
+  { "id": 59, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469470/proofs/mcyur70fsebxuabznoe8.jpg", "label": "IMG_20240829_032704_854.jpg" },
+  { "id": 60, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469473/proofs/oxrv0occaqjcmu7un5ih.jpg", "label": "IMG_20240829_032708_164.jpg" },
+  { "id": 61, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469475/proofs/lma8hw7adrs454fwvjys.jpg", "label": "IMG_20240829_032715_213.jpg" },
+  { "id": 62, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469477/proofs/qixa5mx2irmdoc2dkjeg.jpg", "label": "IMG_20240829_032725_315.jpg" },
+  { "id": 63, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469479/proofs/lxlrdrdyjnomyc8vvdou.jpg", "label": "IMG_20240829_032729_506.jpg" },
+  { "id": 64, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469481/proofs/nqpf7mc5ryacasbwfufh.jpg", "label": "IMG_20240829_032733_541.jpg" },
+  { "id": 65, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469483/proofs/wrcbbfybnhoqiwvz2ydl.jpg", "label": "IMG_20240829_032744_498.jpg" },
+  { "id": 66, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469485/proofs/j45wppbdko5fq6i4drwu.jpg", "label": "IMG_20240829_032748_020.jpg" },
+  { "id": 67, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469487/proofs/se09cl1w6t3qiaeg29kp.jpg", "label": "IMG_20240829_032757_562.jpg" },
+  { "id": 68, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469489/proofs/jmxjnc0epdly8gvkflzz.jpg", "label": "IMG_20240829_032804_641.jpg" },
+  { "id": 69, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469491/proofs/g22hkr3s18o0m6idg7ck.jpg", "label": "IMG_20240829_032808_491.jpg" },
+  { "id": 70, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469493/proofs/bfv0svn0lt8mwrvz9jul.jpg", "label": "IMG_20240829_032821_445.jpg" },
+  { "id": 71, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469495/proofs/ypf4crmiyw8my3fsmhdu.jpg", "label": "IMG_20240829_032825_443.jpg" },
+  { "id": 72, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469497/proofs/awplv8lk4zcjtasvtava.jpg", "label": "IMG_20240829_032837_071.jpg" },
+  { "id": 73, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469499/proofs/ynolkpkcm3vigeygcrg1.jpg", "label": "IMG_20240829_032841_270.jpg" },
+  { "id": 74, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469501/proofs/flbyxhjg6vf1e6u1eqq9.jpg", "label": "IMG_20240829_032843_640.jpg" },
+  { "id": 75, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469503/proofs/z38g1srtec0k3bi46nnf.jpg", "label": "IMG_20240829_032847_082.jpg" },
+  { "id": 76, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469505/proofs/fstpptva9xjmhbgmrzui.jpg", "label": "IMG_20240829_032850_981.jpg" },
+  { "id": 77, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469508/proofs/rpokoj6k12272thesdai.jpg", "label": "IMG_20240829_032854_900.jpg" },
+  { "id": 78, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469510/proofs/ygluc7qvqlnio3jnbk8w.jpg", "label": "IMG_20240829_032859_225.jpg" },
+  { "id": 79, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469512/proofs/tr81r1zkgi8sc9opg09c.jpg", "label": "IMG_20240829_032902_829.jpg" },
+  { "id": 80, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469514/proofs/xcjkj9tr29gyhccqneuk.jpg", "label": "IMG_20240829_032907_545.jpg" },
+  { "id": 81, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469518/proofs/yoniue6g2its5bsp5gvo.jpg", "label": "IMG_20240829_032910_338.jpg" },
+  { "id": 82, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469520/proofs/v3qkxgmwnlraio0venhr.jpg", "label": "IMG_20240829_032944_079.jpg" },
+  { "id": 83, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469522/proofs/xbgn170zqzepqr1xpz5c.jpg", "label": "IMG_20240829_032947_814.jpg" },
+  { "id": 84, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469525/proofs/mipgnvvjwvv362uvd1ww.jpg", "label": "IMG_20240829_032957_535.jpg" },
+  { "id": 85, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469528/proofs/qkjzc1voomb0s6jshafd.jpg", "label": "IMG_20240829_033007_936.jpg" },
+  { "id": 86, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469530/proofs/hlbbftio2cyhzyt7oxqi.jpg", "label": "IMG_20240829_033013_278.jpg" },
+  { "id": 87, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469532/proofs/xzzdsqcprl8fd628bzyr.jpg", "label": "IMG_20240829_033036_547.jpg" },
+  { "id": 88, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469535/proofs/jzcdrhgrkoxusrwoknc8.jpg", "label": "IMG_20240829_033040_147.jpg" },
+  { "id": 89, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469538/proofs/sfswwdj1kvwncs6qqocz.jpg", "label": "IMG_20240829_033045_317.jpg" },
+  { "id": 90, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469540/proofs/qpn5xbc56xg7l7ri5hpg.jpg", "label": "IMG_20240829_033051_252.jpg" },
+  { "id": 91, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469542/proofs/wspsw9brtdckl41ulmdn.jpg", "label": "IMG_20240921_014757_873.jpg" },
+  { "id": 92, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469544/proofs/xn8hus0rkim4wgrsoqm0.jpg", "label": "IMG_20240921_014759_230.jpg" },
+  { "id": 93, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469547/proofs/koplkwqixjigcr8r8ldc.jpg", "label": "IMG_20240921_014759_965.jpg" },
+  { "id": 94, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469548/proofs/dllziy4aret49kikegvh.jpg", "label": "IMG_20240921_014800_679.jpg" },
+  { "id": 95, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469551/proofs/eb9ehtqduyqpz0ltkwi9.jpg", "label": "IMG_20240921_014801_814.jpg" },
+  { "id": 96, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469552/proofs/rsbu3atosvx9dfvcvxno.jpg", "label": "IMG_20240921_014803_405.jpg" },
+  { "id": 97, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469556/proofs/qff2h7ten1v0gncxojde.jpg", "label": "IMG_20240921_014803_886.jpg" },
+  { "id": 98, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469558/proofs/yp5mqhihsfdlzzd7eibs.jpg", "label": "IMG_20240921_014805_874.jpg" },
+  { "id": 99, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469560/proofs/bi439iyyfwbnsttj5kyc.jpg", "label": "IMG_20240921_014806_490.jpg" },
+  { "id": 100, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469561/proofs/ch0wxoxj3caws5tnte2y.jpg", "label": "IMG_20240921_014807_239.jpg" },
+  { "id": 101, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469562/proofs/ixm3x0hnjiqeqcdsnj4s.jpg", "label": "IMG_20240921_014808_621.jpg" },
+  { "id": 102, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469565/proofs/jddzpxsfy54ovzmhpya2.jpg", "label": "IMG_20240921_014810_166.jpg" },
+  { "id": 103, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469566/proofs/hewxm2xj33riwnmulf0f.jpg", "label": "IMG_20240921_014810_877.jpg" },
+  { "id": 104, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469569/proofs/xkfqfsemfnajq4jlpozz.jpg", "label": "IMG_20240921_014811_603.jpg" },
+  { "id": 105, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469570/proofs/da1spja4ihnrrsxekwtv.jpg", "label": "IMG_20240921_014813_979.jpg" },
+  { "id": 106, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469572/proofs/xs49zch4h7jbbtgxuicm.jpg", "label": "IMG_20240921_014814_858.jpg" },
+  { "id": 107, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469574/proofs/dp3h6nshtpzfb9qpag3u.jpg", "label": "IMG_20240921_014816_986.jpg" },
+  { "id": 108, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469575/proofs/l3wbcszalmblvqi13jlj.jpg", "label": "IMG_20240921_014817_855.jpg" },
+  { "id": 109, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469581/proofs/jwq9xxiw2tocavhqy2br.jpg", "label": "IMG_20240921_014818_951.jpg" },
+  { "id": 110, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469582/proofs/o9o7donkctrapwxql3vs.jpg", "label": "IMG_20240921_014820_250.jpg" },
+  { "id": 111, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469584/proofs/dwksjero6ffcpyk24fr1.jpg", "label": "IMG_20240921_014822_026.jpg" },
+  { "id": 112, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469586/proofs/bhjstrolb5oyw6svxrxo.jpg", "label": "IMG_20240921_014822_409.jpg" },
+  { "id": 113, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469587/proofs/ak8fz13een25a0liu8tj.jpg", "label": "IMG_20240921_014823_457.jpg" },
+  { "id": 114, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469592/proofs/fzupt7a2xobxyi5x7o5z.jpg", "label": "IMG_20240921_014825_600.jpg" },
+  { "id": 115, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469594/proofs/z9yt3vylzq6hyhyepvtp.jpg", "label": "IMG_20240921_014827_215.jpg" },
+  { "id": 116, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469596/proofs/gmfvxohcbq3r94iy9hap.jpg", "label": "IMG_20240921_015129_109.jpg" },
+  { "id": 117, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469599/proofs/agqmlnhomcprqshz39b5.jpg", "label": "IMG_20240921_015131_212.jpg" },
+  { "id": 118, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469602/proofs/rrs4wgnpasjd5o8ddroc.jpg", "label": "IMG_20240921_015131_989.jpg" },
+  { "id": 119, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469604/proofs/ulmthniyg5mwnk62losb.jpg", "label": "IMG_20240921_015133_615.jpg" },
+  { "id": 120, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469606/proofs/h5bhrpkj1i4vpbba15ut.jpg", "label": "IMG_20240921_015135_076.jpg" },
+  { "id": 121, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469608/proofs/rwaqwa1nhewg2amvsryd.jpg", "label": "IMG_20240921_015136_289.jpg" },
+  { "id": 122, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469613/proofs/sndmk0c3mglpj8jaqsbw.jpg", "label": "IMG_20240921_015138_829.jpg" },
+  { "id": 123, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469615/proofs/etrkrucnmqpgs2hyu3j9.jpg", "label": "IMG_20240921_015140_209.jpg" },
+  { "id": 124, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469616/proofs/n069fx6bokusp02vwief.jpg", "label": "IMG_20240921_015141_402.jpg" },
+  { "id": 125, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469618/proofs/adnqyd8xhnocexyvi3nz.jpg", "label": "IMG_20240921_015142_096.jpg" },
+  { "id": 126, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469620/proofs/rmgo4vskq1srwmkpgwe4.jpg", "label": "IMG_20240921_015144_075.jpg" },
+  { "id": 127, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469621/proofs/a9kvdtxg5ycsuixjtaaw.jpg", "label": "IMG_20240921_015145_716.jpg" },
+  { "id": 128, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469623/proofs/voyfsisteribccfrkjxs.jpg", "label": "IMG_20240921_015149_108.jpg" },
+  { "id": 129, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469624/proofs/xryptdz8uosxjkxuvp8h.jpg", "label": "IMG_20240921_015150_914.jpg" },
+  { "id": 130, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469625/proofs/lyzth99bbaecfw15ss0z.jpg", "label": "IMG_20240921_015151_365.jpg" },
+  { "id": 131, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469628/proofs/qfrqp0x9t8kfhw5ori3x.jpg", "label": "IMG_20240921_015153_505.jpg" },
+  { "id": 132, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469630/proofs/eoryforijcytszzkjut9.jpg", "label": "IMG_20240921_015155_102.jpg" },
+  { "id": 133, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469631/proofs/h1ljx3u6qrmhds58nwbg.jpg", "label": "IMG_20240921_015157_538.jpg" },
+  { "id": 134, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469633/proofs/y0g4admi8ryjwn99p94u.jpg", "label": "IMG_20240921_015158_990.jpg" },
+  { "id": 135, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469637/proofs/xkwtjh4g5fxzh0svk5lq.jpg", "label": "IMG_20240921_015200_281.jpg" },
+  { "id": 136, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469638/proofs/w8wwvj7itfyuix3aj4wb.jpg", "label": "IMG_20240921_015201_771.jpg" },
+  { "id": 137, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469640/proofs/wdbwajvkgdevu0wse6oe.jpg", "label": "IMG_20240921_015203_836.jpg" },
+  { "id": 138, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469642/proofs/bfr6qge4ov4xniawgunh.jpg", "label": "IMG_20240921_015204_982.jpg" },
+  { "id": 139, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469643/proofs/ypahf4ten9oah1qzywub.jpg", "label": "IMG_20240921_015206_341.jpg" },
+  { "id": 140, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469647/proofs/in0k0saiveflrjng04op.jpg", "label": "IMG_20240921_015207_833.jpg" },
+  { "id": 141, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469650/proofs/j98d8gy0kto29vdk0h4h.jpg", "label": "IMG_20240921_015209_121.jpg" },
+  { "id": 142, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469652/proofs/lvsxs6swlwdrjb5sre5w.jpg", "label": "IMG_20240921_015210_421.jpg" },
+  { "id": 143, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469654/proofs/ekj8zhq0yz8kxn0l2vjo.jpg", "label": "IMG_20240921_015212_135.jpg" },
+  { "id": 144, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469656/proofs/lwupvqjq4uxc0bxg4e7e.jpg", "label": "IMG_20240921_015212_851.jpg" },
+  { "id": 145, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469658/proofs/puvkn0dexa35bcypvaw4.jpg", "label": "IMG_20240921_015214_146.jpg" },
+  { "id": 146, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469660/proofs/hszbfrovu4swu45dr93v.jpg", "label": "IMG_20240921_015215_188.jpg" },
+  { "id": 147, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469661/proofs/gpmfkh8pppuqopl3wmgx.jpg", "label": "IMG_20240921_015217_651.jpg" },
+  { "id": 148, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469664/proofs/xwjg7jqrptbsxekeou1r.jpg", "label": "IMG_20240921_015218_449.jpg" },
+  { "id": 149, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469666/proofs/muxt6qmqofezvfkqifls.jpg", "label": "IMG_20240921_015219_844.jpg" },
+  { "id": 150, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469668/proofs/awdtfsw09onj47wtrw4s.jpg", "label": "IMG_20240921_015225_765.jpg" },
+  { "id": 151, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469671/proofs/r8yjb9r8vsjf1qqpk0kx.jpg", "label": "IMG_20240921_015227_341.jpg" },
+  { "id": 152, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg", "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg" }
 ];
 
 const PROOFS_PREVIEW_COUNT = 12;
 
-// TradingView-style products offer 3 duration tiers, each of which is its
-// own product record (with its own id/price) in the backend. We fetch each
-// plan's real price on mount so "Buy Now" can go straight to the payment
-// page instead of bouncing the user to another product page first.
-const tradingViewPlans = [
-  { id: "6",  duration: "3 Months" },
-  { id: "12", duration: "6 Months" },
-  { id: "18", duration: "12 Months" },
+// Some products offer multiple duration tiers (3 / 6 / 12 months) instead of
+// a single price. Each config below describes how to detect that product
+// (by name) and what plans/pricing to show.
+//
+// fetchPrices: true  → each plan is its own product record in the backend;
+//                       we fetch its real price/strike-through price by id.
+// fetchPrices: false → prices are fixed and known up front, so we use them
+//                       directly with no extra network round trip.
+const multiPlanConfigs = [
+  {
+    key: "tradingview",
+    match: (name) => (name || "").toLowerCase().includes("tradingview"),
+    fetchPrices: true,
+    plans: [
+      { id: "6",  duration: "3 Months" },
+      { id: "12", duration: "6 Months" },
+      { id: "18", duration: "12 Months" },
+    ],
+  },
+  {
+    key: "higgsfield-max-plan",
+    // Case-insensitive match against the lowercased product name — the
+    // previous version compared against a mixed-case string, which never
+    // matched and silently fell back to the single-price layout.
+    match: (name) => {
+      const n = (name || "").toLowerCase();
+      return n.includes("higgsfield") && n.includes("max");
+    },
+    fetchPrices: true,
+    plans: [
+      { id: "26", duration: "3 Months" },
+      { id: "25", duration: "6 Months" },
+      { id: "24", duration: "12 Months" },
+    ],
+  },
 ];
 
 const ProductPage = () => {
@@ -2026,9 +1700,15 @@ const ProductPage = () => {
   const [proofsHidden, setProofsHidden] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
-  const [selectedPlanId, setSelectedPlanId] = useState(tradingViewPlans[0].id);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
-  const [showFloatingHideBtn, setShowFloatingHideBtn] = useState(false);
+
+  // Whether the proofs section is currently intersecting the viewport at
+  // all (regardless of whether the user has manually "hidden" it). Drives
+  // BOTH floating buttons below: the collapse ("Hide Proofs") button when
+  // the section is in view, and the persistent side "Proofs" shortcut tab
+  // whenever it's not — so there's always exactly one way to reach it.
+  const [proofsInView, setProofsInView] = useState(false);
 
   // Countdown target: midnight tonight (00:00 the next calendar day), computed
   // once via the lazy initializer so it stays fixed for the whole session
@@ -2039,7 +1719,7 @@ const ProductPage = () => {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
   });
 
-  // Real per-plan prices, fetched from the backend. Keyed by plan id.
+  // Real per-plan prices. Keyed by plan id.
   // { "6": { price: 999, strikeThroughPrice: 1499 }, ... }
   const [planPrices, setPlanPrices] = useState({});
   const [planPricesLoading, setPlanPricesLoading] = useState(false);
@@ -2050,11 +1730,13 @@ const ProductPage = () => {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [modalError, setModalError] = useState("");
-  const [submittingMethod, setSubmittingMethod] = useState(null); // "upi" | "bank" | null
+  // "gpay" | "phonepe" | "paytm" | "upi" | "bank" | null — which button is
+  // currently mid-submit, so we can disable the rest and show status text.
+  const [submittingMethod, setSubmittingMethod] = useState(null);
   // Tracks the post-UPI-click "did the buyer leave and come back" flow: once
-  // they tap "Pay with UPI" we set upiInitiated, then watch for the tab
-  // becoming visible again (they've returned from their UPI app) to flip the
-  // button into "Proceed to WhatsApp".
+  // they tap one of the UPI app buttons we set upiInitiated, then watch for
+  // the tab becoming visible again (they've returned from their UPI app) to
+  // swap the app picker for a single "Proceed to WhatsApp" confirmation step.
   const [upiInitiated, setUpiInitiated] = useState(false);
   const [showUpiWhatsappCta, setShowUpiWhatsappCta] = useState(false);
 
@@ -2090,14 +1772,32 @@ const ProductPage = () => {
     fetchProduct();
   }, [id]);
 
-  // Once we know this is a TradingView-style product, fetch the real price
-  // (and strike-through price) for every plan up front so the selector and
-  // Buy Now button can show/use accurate numbers without an extra round
-  // trip when the user clicks.
+  // Once the product loads, pick the default selected plan for whichever
+  // multi-plan config (if any) matches this product's name.
   useEffect(() => {
     if (!product) return;
-    const isTV = (product.name || "").toLowerCase().includes("tradingview");
-    if (!isTV) return;
+    const config = multiPlanConfigs.find(c => c.match(product.name));
+    setSelectedPlanId(config ? config.plans[0].id : null);
+  }, [product]);
+
+  // Once we know which multi-plan config (if any) matches this product,
+  // populate planPrices — either by fetching each plan's real price from
+  // the backend (fetchPrices: true) or by using the fixed prices already
+  // baked into the config (fetchPrices: false).
+  useEffect(() => {
+    if (!product) return;
+    const config = multiPlanConfigs.find(c => c.match(product.name));
+    if (!config) return;
+
+    if (!config.fetchPrices) {
+      setPlanPrices(Object.fromEntries(
+        config.plans.map(plan => [
+          plan.id,
+          { price: plan.price, strikeThroughPrice: plan.strikeThroughPrice || null },
+        ])
+      ));
+      return;
+    }
 
     let cancelled = false;
     const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
@@ -2106,7 +1806,7 @@ const ProductPage = () => {
       setPlanPricesLoading(true);
       try {
         const results = await Promise.all(
-          tradingViewPlans.map(async (plan) => {
+          config.plans.map(async (plan) => {
             try {
               const res = await fetch(`${apiBase}/products/${plan.id}`);
               const data = await res.json();
@@ -2143,29 +1843,28 @@ const ProductPage = () => {
     return () => observer.disconnect();
   }, [product, isLoading]);
 
-  // Show a floating "Hide Proofs" button whenever the proofs gallery is open
-  // and scrolled into view, so the person can collapse it without scrolling
-  // back up to the toggle button at the top of the section.
+  // Track whether the proofs section itself is on screen. This single
+  // observer feeds both floating buttons: when the section IS in view (and
+  // hasn't been manually hidden) we show "Hide Proofs"; whenever it's NOT in
+  // view we show the persistent side "Proofs" shortcut tab instead, so a
+  // way back to the proofs is always available no matter where on the page
+  // the visitor currently is.
   useEffect(() => {
-    if (!product || proofsHidden || !proofsSectionRef.current) {
-      setShowFloatingHideBtn(false);
+    if (!product || !proofsSectionRef.current) {
+      setProofsInView(false);
       return;
     }
 
     const observer = new IntersectionObserver(
-      ([entry]) => setShowFloatingHideBtn(entry.isIntersecting),
-      { threshold: 0 } // fire as soon as ANY part of the section is on screen —
-                        // ratio-based thresholds (e.g. 0.15) break once the
-                        // section grows huge after "Show 100+ more" is clicked,
-                        // because 15% of a very tall element is bigger than
-                        // one viewport and can never be satisfied again.
+      ([entry]) => setProofsInView(entry.isIntersecting),
+      { threshold: 0 }
     );
     observer.observe(proofsSectionRef.current);
     return () => observer.disconnect();
-  }, [product, isLoading, proofsHidden]);
+  }, [product, isLoading]);
 
   // Buy Now no longer navigates straight to the payment page — it opens the
-  // payment modal (amount + contact details + UPI/bank choice) instead.
+  // payment modal (amount + contact details + payment app picker) instead.
   const handleBuyNowClick = () => {
     if (!product || typeof product.price === "undefined") {
       alert("Error: Could not retrieve product details. Please try again later.");
@@ -2174,10 +1873,11 @@ const ProductPage = () => {
     openPaymentModal({ amount: product.price, productId: id, productName: product.name || "Product" });
   };
 
-  // TradingView-style: "Buy Now" opens the same payment modal, using the
-  // selected plan's real fetched price.
-  const handleTradingViewBuyNowClick = () => {
-    const plan = tradingViewPlans.find(p => p.id === selectedPlanId);
+  // Multi-plan products (TradingView, Higgs Field Max, etc.): "Buy Now"
+  // opens the same payment modal, using the selected plan's price.
+  const handleMultiPlanBuyNowClick = () => {
+    const config = multiPlanConfigs.find(c => c.match(product?.name));
+    const plan = config?.plans.find(p => p.id === selectedPlanId);
     const price = planPrices[selectedPlanId]?.price;
 
     if (!plan || price === null || typeof price === "undefined") {
@@ -2211,10 +1911,11 @@ const ProductPage = () => {
     setShowUpiWhatsappCta(false);
   };
 
-  // Once the buyer has tapped "Pay with UPI" (upiInitiated), watch for them
-  // returning to this tab — that's our signal they've been over to their UPI
-  // app and (hopefully) finished paying. When they come back, flip the UPI
-  // button into "Proceed to WhatsApp" so they can go confirm the order.
+  // Once the buyer has tapped one of the UPI app buttons (upiInitiated),
+  // watch for them returning to this tab — that's our signal they've been
+  // over to their UPI app and (hopefully) finished paying. When they come
+  // back, swap the app picker for "Proceed to WhatsApp" so they can go
+  // confirm the order.
   useEffect(() => {
     if (!showPaymentModal || !upiInitiated) return;
 
@@ -2233,8 +1934,8 @@ const ProductPage = () => {
   }, [showPaymentModal, upiInitiated]);
 
   // Sends the buyer straight to WhatsApp — used for bank transfer (always)
-  // and for the "Proceed to WhatsApp" state of the UPI button (after they've
-  // already paid and come back to the tab).
+  // and for the "Proceed to WhatsApp" state after they've already paid via
+  // a UPI app and come back to the tab.
   const goToWhatsApp = (context) => {
     if (!modalOrder) return;
     const link = buildWhatsAppLink({
@@ -2246,8 +1947,9 @@ const ProductPage = () => {
   };
 
   // Validates the contact fields, notifies the backend (which relays the
-  // order to Telegram), then either fires the UPI deep link or sends the
-  // buyer straight to WhatsApp for bank transfer.
+  // order to Telegram), then either fires the chosen UPI app's deep link or
+  // sends the buyer straight to WhatsApp for bank transfer.
+  // `method` is one of: "gpay" | "phonepe" | "paytm" | "upi" | "bank".
   const submitPayment = async (method) => {
     if (!modalOrder) return;
 
@@ -2283,22 +1985,24 @@ const ProductPage = () => {
       console.error("Failed to notify backend of order:", err);
     }
 
-    if (method === "upi") {
-      const upiLink = buildUpiDeepLink({
-        amount: modalOrder.amount,
-        note: `${modalOrder.productName} - ${id}`,
-      });
-      setUpiInitiated(true);
-      window.location.href = upiLink;
-      // Give the deep link a brief moment to hand off to the UPI app before
-      // resetting the button state (in case it doesn't leave the page, e.g.
-      // on desktop where no UPI app is installed).
-      setTimeout(() => setSubmittingMethod(null), 2500);
-    } else {
-      // Bank transfer now goes straight to WhatsApp instead of a separate
-      // payment page.
+    if (method === "bank") {
+      // Bank transfer goes straight to WhatsApp instead of a payment app.
       goToWhatsApp("bank");
+      return;
     }
+
+    // Any of gpay / phonepe / paytm / upi: open that specific app (or, for
+    // "upi", the OS's normal UPI app chooser) with the amount pre-filled.
+    const link = buildAppUpiDeepLink(method, {
+      amount: modalOrder.amount,
+      note: `${modalOrder.productName} - ${id}`,
+    });
+    setUpiInitiated(true);
+    window.location.href = link;
+    // Give the deep link a brief moment to hand off to the app before
+    // resetting the button state (in case it doesn't leave the page, e.g.
+    // on desktop where no UPI app is installed).
+    setTimeout(() => setSubmittingMethod(null), 2500);
   };
 
   // Compact renderer used for the countdown chip inside the sticky Buy Now
@@ -2359,20 +2063,33 @@ const ProductPage = () => {
     : null;
   // ───────────────────────────────────────────────────────────────────────────
 
-  const isTradingView = (product?.name || "").toLowerCase().includes("tradingview");
+  const activePlanConfig = multiPlanConfigs.find(c => c.match(product?.name)) || null;
+  const isMultiPlan = !!activePlanConfig;
+  const currentPlans = activePlanConfig ? activePlanConfig.plans : [];
+
   const selectedPlanPrice = planPrices[selectedPlanId]?.price;
   const selectedPlanStrike = planPrices[selectedPlanId]?.strikeThroughPrice;
-  const selectedPlanDuration = tradingViewPlans.find(p => p.id === selectedPlanId)?.duration;
+  const selectedPlanDuration = currentPlans.find(p => p.id === selectedPlanId)?.duration;
 
   // Values the sticky bar and its Buy Now button use, regardless of product type.
-  const stickyPrice = isTradingView ? selectedPlanPrice : product.price;
+  const stickyPrice = isMultiPlan ? selectedPlanPrice : product.price;
+  const stickyStrike = isMultiPlan ? selectedPlanStrike : product.strikeThroughPrice;
   const stickyPriceDisplay = formatINR(stickyPrice);
-  const stickyDisabled = isTradingView && (planPricesLoading || selectedPlanPrice === null || typeof selectedPlanPrice === "undefined");
-  const stickyHandler = isTradingView ? handleTradingViewBuyNowClick : handleBuyNowClick;
+  const stickyStrikeDisplay = (stickyStrike && stickyPrice && Number(stickyStrike) > Number(stickyPrice))
+    ? formatINR(stickyStrike)
+    : null;
+  const stickyDisabled = isMultiPlan && (planPricesLoading || selectedPlanPrice === null || typeof selectedPlanPrice === "undefined");
+  const stickyHandler = isMultiPlan ? handleMultiPlanBuyNowClick : handleBuyNowClick;
 
   // Proofs: prefer real per-product data from the backend, fall back to dummy set.
   const proofImages = (product.proofs && product.proofs.length > 0) ? product.proofs : dummyProofImages;
   const visibleProofs = showAllProofs ? proofImages : proofImages.slice(0, PROOFS_PREVIEW_COUNT);
+
+  // The "Hide Proofs" floating pill only makes sense once the section is
+  // both visible on screen AND not already collapsed by the user. The
+  // side "Proofs" shortcut tab covers every other state.
+  const showFloatingHideBtn = proofsInView && !proofsHidden;
+  const showFloatingViewProofsTab = !proofsInView;
 
   const carouselSettings = {
     dots: true, infinite: true, speed: 800,
@@ -2432,7 +2149,7 @@ const ProductPage = () => {
             </div>
 
             {/* ── Real pricing, straight from the backend ── */}
-            {!isTradingView && (
+            {!isMultiPlan && (
               <div className="pp-pricing">
                 <span className="pp-price-current">{displayPrice}</span>
                 {displayStrike && <span className="pp-price-strike">{displayStrike}</span>}
@@ -2443,11 +2160,11 @@ const ProductPage = () => {
             {/* This ref marks where the "main" buy button lives. Once it scrolls
                 out of view, the sticky bottom bar takes over as the CTA. */}
             <div ref={buyBtnAnchorRef}>
-              {isTradingView ? (
+              {isMultiPlan ? (
                 <>
                   <div className="pp-plans">
                     <span className="pp-plan-label">Choose your plan</span>
-                    {tradingViewPlans.map((plan, idx) => {
+                    {currentPlans.map((plan, idx) => {
                       const isActive = selectedPlanId === plan.id;
                       const price = planPrices[plan.id]?.price;
                       const strikePrice = planPrices[plan.id]?.strikeThroughPrice;
@@ -2463,7 +2180,7 @@ const ProductPage = () => {
                           <span className="pp-plan-main">
                             <span className="pp-plan-radio"><span className="pp-plan-radio-dot" /></span>
                             <span className="pp-plan-duration">{plan.duration}</span>
-                            {idx === tradingViewPlans.length - 1 && (
+                            {idx === currentPlans.length - 1 && (
                               <span className="pp-plan-badge">Best Value</span>
                             )}
                           </span>
@@ -2483,12 +2200,16 @@ const ProductPage = () => {
                       );
                     })}
                   </div>
-                     <button type="button" className="pp-proofs-cta" onClick={scrollToProofs}>
-              🔍 Show me some proofs first
-            </button>
+
+                  <button type="button" className="pp-proofs-cta" onClick={scrollToProofs}>
+                    <span className="pp-proofs-cta-icon">🔍</span>
+                    See Real Proof It Works
+                    <span className="pp-proofs-cta-arrow">→</span>
+                  </button>
+
                   <button
                     className="pp-buy-btn"
-                    onClick={handleTradingViewBuyNowClick}
+                    onClick={handleMultiPlanBuyNowClick}
                     disabled={planPricesLoading || selectedPlanPrice === null || typeof selectedPlanPrice === "undefined"}
                   >
                     Buy Now{selectedPlanPrice ? ` — ${formatINR(selectedPlanPrice)}` : ""} <span className="pp-btn-arrow">→</span>
@@ -2640,15 +2361,34 @@ const ProductPage = () => {
         </button>
       )}
 
+      {/* ---------- Persistent side "Proofs" tab ----------
+          Docked to the right edge of the viewport whenever the proofs
+          section is scrolled out of view — always available, from anywhere
+          on the page, as a shortcut straight to delivery proof. */}
+      {showFloatingViewProofsTab && (
+        <button
+          type="button"
+          className="pp-floating-view-proofs-tab"
+          onClick={scrollToProofs}
+          aria-label="Jump to delivery proofs"
+        >
+          <span className="pp-floating-view-proofs-icon">🔍</span>
+          <span className="pp-floating-view-proofs-text">Proofs</span>
+        </button>
+      )}
+
       {/* ---------- Sticky Buy Now bar (appears once the main CTA scrolls out of view) ---------- */}
       {showStickyBar && (
         <div className="pp-sticky-buybar">
           <div className="pp-sticky-info">
             <span className="pp-sticky-name">
-              {product.name}{isTradingView && selectedPlanDuration ? ` — ${selectedPlanDuration}` : ""}
+              {product.name}{isMultiPlan && selectedPlanDuration ? ` — ${selectedPlanDuration}` : ""}
             </span>
             <span className="pp-sticky-price">
-              {stickyPriceDisplay || (isTradingView ? "Loading…" : "")}
+              {stickyStrikeDisplay && (
+                <span className="pp-sticky-price-strike">{stickyStrikeDisplay}</span>
+              )}
+              {stickyPriceDisplay || (isMultiPlan ? "Loading…" : "")}
             </span>
           </div>
           <Countdown date={countdownEnd} renderer={renderStickyCountdown} />
@@ -2662,7 +2402,7 @@ const ProductPage = () => {
         </div>
       )}
 
-      {/* ---------- UPI / Bank payment modal ---------- */}
+      {/* ---------- Payment modal ---------- */}
       {showPaymentModal && modalOrder && (
         <div className="pp-modal-overlay" onClick={closePaymentModal}>
           <div className="pp-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -2712,33 +2452,69 @@ const ProductPage = () => {
 
             {modalError && <p className="pp-modal-error">{modalError}</p>}
 
-            <div className="pp-modal-actions">
+            {showUpiWhatsappCta ? (
+              // Buyer already tapped a UPI app button and has returned to this
+              // tab — collapse the picker into a single confirmation step.
               <button
                 type="button"
                 className="pp-modal-btn pp-modal-btn--upi"
-                onClick={() => (showUpiWhatsappCta ? goToWhatsApp("upi-confirm") : submitPayment("upi"))}
-                disabled={!!submittingMethod}
+                onClick={() => goToWhatsApp("upi-confirm")}
               >
-                {showUpiWhatsappCta
-                  ? "Proceed to WhatsApp"
-                  : submittingMethod === "upi"
-                  ? "Opening UPI app…"
-                  : "Pay with UPI"}
+                Proceed to WhatsApp
               </button>
-              <button
-                type="button"
-                className="pp-modal-btn pp-modal-btn--bank"
-                onClick={() => submitPayment("bank")}
-                disabled={!!submittingMethod}
-              >
-                {submittingMethod === "bank" ? "Redirecting…" : "Pay with Bank Transfer"}
-              </button>
-            </div>
+            ) : (
+              <>
+                <span className="pp-modal-section-label">Choose payment app</span>
+                <div className="pp-upi-apps-list">
+                  {upiApps.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      className="pp-upi-app-btn"
+                      onClick={() => submitPayment(app.id)}
+                      disabled={!!submittingMethod}
+                    >
+                      <span className="pp-upi-app-icon">
+                        <img
+                          src={app.icon}
+                          alt=""
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                        <span
+                          className="pp-upi-app-icon-fallback"
+                          style={{ display: "none", background: app.accent }}
+                        >
+                          {app.name.charAt(0)}
+                        </span>
+                      </span>
+                      <span className="pp-upi-app-name">
+                        {submittingMethod === app.id ? `Opening ${app.name}…` : app.name}
+                      </span>
+                      <span className="pp-upi-app-arrow">→</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pp-modal-divider"><span>or</span></div>
+
+                <button
+                  type="button"
+                  className="pp-modal-btn pp-modal-btn--bank"
+                  onClick={() => submitPayment("bank")}
+                  disabled={!!submittingMethod}
+                >
+                  {submittingMethod === "bank" ? "Redirecting…" : "Pay with Bank Transfer"}
+                </button>
+              </>
+            )}
 
             <p className="pp-modal-note">
               {showUpiWhatsappCta
                 ? "Tap \"Proceed to WhatsApp\" to confirm your payment and get your order delivered."
-                : "\"Pay with UPI\" opens your UPI app directly with the amount pre-filled. Your details are used only to confirm and deliver this order."}
+                : "Choosing an app opens it directly with the amount pre-filled. Your details are used only to confirm and deliver this order."}
             </p>
           </div>
         </div>
