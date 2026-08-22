@@ -383,7 +383,7 @@ const About = () => {
             Premium Products.<br /><span>Honest Prices.</span>
           </h1>
           <p className="about-hero-sub">
-            Since 2021, Dexter Luxuries has been India's most trusted destination for premium digital subscriptions and tools.
+            Since 2021, MKR Tools & Softwares has been India's most trusted destination for premium digital subscriptions and tools.
           </p>
         </section>
 
@@ -399,17 +399,17 @@ const About = () => {
         <div className="about-story">
           <div className="reveal" ref={addRef}>
             <p className="about-section-eyebrow">Who We Are</p>
-            <h2 className="about-section-title">Dexter Luxuries</h2>
+            <h2 className="about-section-title">MKR Tools & Softwares</h2>
             <div className="about-body">
               <p>
-                Welcome to <strong>Dexter Luxuries</strong> — a leading digital product store established in 2021. Over the years, we have built a loyal community of over <strong>50,000 traders and digital enthusiasts</strong> who trust us for high-quality products that enhance their lifestyle and trading edge.
+                Welcome to <strong>MKR Tools & Softwares</strong> — a leading digital product store established in 2021. Over the years, we have built a loyal community of over <strong>50,000 traders and digital enthusiasts</strong> who trust us for high-quality products that enhance their lifestyle and trading edge.
               </p>
               <p>
                 Our mission is simple: deliver <strong>premium digital tools at prices that are accessible to everyone</strong>. Whether you're a seasoned trader seeking TradingView Premium or a tech enthusiast looking for the best digital subscriptions, we have you covered — instantly.
               </p>
               <div className="about-divider" />
               <p>
-                At Dexter Luxuries, we understand that in the fast-moving world of digital products, <strong>quality and reliability are non-negotiable</strong>. That's why we carefully vet every product we offer and stand behind every single order with our replacement guarantee.
+                At MKR Tools & Softwares, we understand that in the fast-moving world of digital products, <strong>quality and reliability are non-negotiable</strong>. That's why we carefully vet every product we offer and stand behind every single order with our replacement guarantee.
               </p>
               <p>
                 Our community is the heart of our success. We're proud to have helped thousands of individuals elevate their digital experience — and we're just getting started. As we grow, our commitment to <strong>personalized service, swift support, and honest pricing</strong> will never waver.
@@ -438,7 +438,7 @@ const About = () => {
 
         <section className="about-cta reveal" ref={addRef}>
           <h2 className="about-cta-title">Ready to Get Started?</h2>
-          <p className="about-cta-sub">Join 50,000+ satisfied customers and experience Dexter Luxuries today.</p>
+          <p className="about-cta-sub">Join 50,000+ satisfied customers and experience MKR Tools & Softwares today.</p>
           <div className="about-cta-buttons">
             <a href="/products" className="about-btn-primary">Browse Products →</a>
             <a href="/contact" className="about-btn-secondary">Get in Touch</a>

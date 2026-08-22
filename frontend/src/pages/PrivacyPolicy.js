@@ -1,23 +1,26 @@
 import React, { useEffect, useRef } from "react";
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
   :root {
-    --gold: #C9A84C;
-    --gold-light: #E8C97A;
-    --dark: #0A0A0A;
-    --dark2: #111111;
-    --dark3: #1A1A1A;
-    --white: #F5F0E8;
-    --white-dim: rgba(245,240,232,0.6);
-    --white-faint: rgba(245,240,232,0.08);
+    --bg: #05050A;
+    --bg2: #0A0A13;
+    --surface: rgba(255,255,255,0.045);
+    --border: rgba(255,255,255,0.09);
+    --violet: #8B5CF6;
+    --violet-soft: #C4B5FD;
+    --cyan: #22D3EE;
+    --text: #F4F2FF;
+    --text-dim: rgba(244,242,255,0.62);
+    --text-faint: rgba(244,242,255,0.38);
+    --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
   }
 
   .pp-pol-root {
-    background: var(--dark);
-    color: var(--white);
-    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
     min-height: 100vh;
   }
 
@@ -32,41 +35,57 @@ const style = `
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(201,168,76,0.13) 0%, transparent 65%);
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(139,92,246,0.16) 0%, transparent 65%);
     pointer-events: none;
   }
 
   .pp-pol-eyebrow {
-    font-size: 11px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: var(--gold);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 7px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    color: var(--text-dim);
     font-weight: 500;
     margin-bottom: 20px;
     animation: fadeUp 0.6s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .pp-pol-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(2.4rem, 5vw, 4rem);
-    font-weight: 900;
+    font-weight: 700;
+    letter-spacing: -1.5px;
     line-height: 1.1;
     margin-bottom: 20px;
     animation: fadeUp 0.7s 0.1s ease both;
+    position: relative;
+    z-index: 1;
   }
 
   .pp-pol-title em {
-    font-style: italic;
-    color: var(--gold);
+    font-style: normal;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .pp-pol-updated {
     font-size: 12px;
     letter-spacing: 1.5px;
-    color: rgba(245,240,232,0.35);
-    font-weight: 300;
+    color: var(--text-faint);
+    font-weight: 400;
     animation: fadeUp 0.7s 0.2s ease both;
     text-transform: uppercase;
+    position: relative;
+    z-index: 1;
   }
 
   .pp-pol-body {
@@ -77,12 +96,13 @@ const style = `
 
   .pp-pol-intro {
     font-size: 16px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.85;
     font-weight: 300;
     padding: 32px 36px;
-    border-left: 2px solid var(--gold);
-    background: var(--dark2);
+    border-left: 2px solid var(--violet);
+    background: var(--bg2);
+    border-radius: 0 12px 12px 0;
     margin-bottom: 64px;
   }
 
@@ -99,27 +119,27 @@ const style = `
   }
 
   .pp-pol-section-num {
-    font-size: 10px;
-    letter-spacing: 3px;
+    font-size: 11px;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--gold);
-    font-weight: 500;
+    color: var(--violet-soft);
+    font-weight: 600;
     margin-bottom: 10px;
     display: block;
   }
 
   .pp-pol-section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.4rem;
     font-weight: 700;
     margin-bottom: 20px;
-    color: var(--white);
+    color: var(--text);
     line-height: 1.25;
   }
 
   .pp-pol-text {
     font-size: 15px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.85;
     font-weight: 300;
     margin-bottom: 16px;
@@ -140,34 +160,35 @@ const style = `
     display: flex;
     gap: 14px;
     font-size: 15px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     line-height: 1.75;
     font-weight: 300;
   }
 
   .pp-pol-list li::before {
     content: '✦';
-    color: var(--gold);
+    color: var(--violet-soft);
     font-size: 10px;
     flex-shrink: 0;
     margin-top: 5px;
   }
 
   .pp-pol-list strong {
-    color: var(--white);
-    font-weight: 500;
+    color: var(--text);
+    font-weight: 600;
   }
 
   .pp-pol-divider {
     width: 48px;
     height: 1px;
-    background: linear-gradient(to right, var(--gold), transparent);
+    background: var(--grad);
     margin: 48px 0;
   }
 
   .pp-pol-contact-box {
-    background: var(--dark2);
-    border: 1px solid rgba(201,168,76,0.2);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
     padding: 36px;
     position: relative;
     overflow: hidden;
@@ -178,20 +199,20 @@ const style = `
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(to right, var(--gold), transparent);
+    background: var(--grad);
   }
 
   .pp-pol-contact-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Space Grotesk', sans-serif;
     font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 12px;
-    color: var(--white);
+    color: var(--text);
   }
 
   .pp-pol-contact-text {
     font-size: 15px;
-    color: var(--white-dim);
+    color: var(--text-dim);
     font-weight: 300;
     line-height: 1.7;
     margin-bottom: 20px;
@@ -201,20 +222,23 @@ const style = `
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: var(--gold);
+    color: var(--text);
+    background: var(--grad);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     text-decoration: none;
-    border: 1px solid rgba(201,168,76,0.3);
-    padding: 10px 22px;
-    border-radius: 2px;
-    transition: all 0.2s;
+    padding: 11px 24px;
+    border-radius: 10px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .pp-pol-contact-link {
+    color: #0A0A13;
   }
 
   .pp-pol-contact-link:hover {
-    background: var(--gold);
-    color: #000;
-    border-color: var(--gold);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 32px rgba(139,92,246,0.35);
   }
 
   @keyframes fadeUp {
@@ -325,14 +349,14 @@ const PrivacyPolicy = () => {
       <div className="pp-pol-root">
 
         <section className="pp-pol-hero">
-          <p className="pp-pol-eyebrow">✦ Legal ✦</p>
+          <span className="pp-pol-eyebrow">✦ Legal ✦</span>
           <h1 className="pp-pol-title">Privacy <em>Policy</em></h1>
           <p className="pp-pol-updated">Last Updated — January 2025</p>
         </section>
 
         <div className="pp-pol-body">
           <div className="pp-pol-intro">
-            At Dexter Luxuries, we value your privacy and are committed to protecting the personal information you share with us. This Privacy Policy outlines how we collect, use, store, and safeguard your data when you visit our website or make a purchase from our digital product store.
+            At MKR Tools & Softwares, we value your privacy and are committed to protecting the personal information you share with us. This Privacy Policy outlines how we collect, use, store, and safeguard your data when you visit our website or make a purchase from our digital product store.
           </div>
 
           {sections.map((sec, i) => (

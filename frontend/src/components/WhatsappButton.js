@@ -178,7 +178,7 @@ const style = `
  * parent state.
  */
 const WhatsappButton = ({ stickyBarVisible = false, stickyBarSelector = '.pp-sticky-buybar' }) => {
-  const phoneNumber = '919289847981'; // 🔴 Replace with your number (with country code, no +)
+  const phoneNumber = '+12403013547'; // 🔴 Replace with your number (with country code, no +)
   const message = 'Hello! I am interested in your TradingView Premium plans. Can you share more details?';
   const [barHeight, setBarHeight] = useState(0);
 
