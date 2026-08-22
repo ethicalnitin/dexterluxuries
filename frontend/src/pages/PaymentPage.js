@@ -12,7 +12,7 @@ const QR_IMAGE_URL = "https://i.ibb.co/cSFGRFqY/image.png";
 
 // ── Crypto config ────────────────────────────────────────────────────────
 // TODO: replace with your real BEP20 wallet address before going live.
-const CRYPTO_WALLET_ADDRESS = "0xYOUR_BEP20_WALLET_ADDRESS_HERE";
+const CRYPTO_WALLET_ADDRESS = "0xEA56A38CB9Ddfe0F49D2d90fC4afA5A204Dc5ac8";
 const CRYPTO_CHAIN_LABEL = "USDT · BEP20 (BNB Smart Chain)";
 
 const PAYMENT_WINDOW_SECONDS = 10 * 60; // 10 minutes, starts once they reach the pay screen
