@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { FaTelegram, FaBars, FaTimes } from "react-icons/fa";
+import { FaTelegram, FaBars, FaTimes, FaUserCircle } from "react-icons/fa";
 import { Link } from "react-router-dom";
-import logo from "../assets/lgo.jpeg";
+import logo from "../assets/lgo.png";
+import { useAuth } from "../pages/AuthContext";
 
 const style = `
+  /* ...unchanged... */
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500&display=swap');
 
   :root {
@@ -187,6 +189,46 @@ const style = `
     box-shadow: 0 10px 28px rgba(139,92,246,0.35);
   }
 
+  /* --- new auth-related styles --- */
+  .navbar-auth-block {
+    margin-top: 14px;
+    padding-top: 18px;
+    border-top: 1px solid var(--nb-border);
+  }
+
+  .navbar-auth-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--nb-text-dim);
+    margin-bottom: 12px;
+    word-break: break-all;
+  }
+
+  .navbar-auth-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--nb-border);
+    color: var(--nb-text);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .navbar-auth-btn:hover {
+    background: rgba(139,92,246,0.14);
+    border-color: rgba(139,92,246,0.4);
+  }
+
   .navbar-drawer-footer {
     font-size: 11px;
     color: rgba(244,242,255,0.25);
@@ -207,12 +249,13 @@ const navLinks = [
   { label: "Home", to: "/" },
   { label: "About", to: "/about" },
   { label: "Contact", to: "/contact" },
-  { label: "Proofs & Vouches", to: "/Proofs" },
+  { label: "Proofs & Vouches", to: "/proofs" },
 ];
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const { user, isAuthenticated, openLogin, logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -230,13 +273,23 @@ const Navbar = () => {
     setIsOpen(false);
   };
 
+  const handleLoginClick = () => {
+    setIsOpen(false);
+    openLogin();
+  };
+
+  const handleLogoutClick = () => {
+    setIsOpen(false);
+    logout();
+  };
+
   return (
     <>
       <style>{style}</style>
       <header className={`navbar-root ${isScrolled ? "navbar-scrolled" : "navbar-top"}`}>
         <Link to="/" className="navbar-logo-link" onClick={() => setIsOpen(false)}>
-          <img src={logo} alt="ChartVault" className="navbar-logo-img" />
-          <span className="navbar-brand">ChartVault</span>
+          <img src={logo} alt="MKR Tools & Softwares" className="navbar-logo-img" />
+          <span className="navbar-brand">MKR Tools & Softwares</span>
         </Link>
 
         <button className="navbar-hamburger" onClick={() => setIsOpen(!isOpen)} aria-label="Toggle menu">
@@ -254,8 +307,26 @@ const Navbar = () => {
             <button onClick={handleTelegramClick} className="navbar-tg-btn-mobile">
               <FaTelegram size={16} /> Join our Telegram
             </button>
+
+            <div className="navbar-auth-block">
+              {isAuthenticated ? (
+                <>
+                  <div className="navbar-auth-user">
+                    <FaUserCircle size={18} />
+                    <span>{user?.email}</span>
+                  </div>
+                  <button className="navbar-auth-btn" onClick={handleLogoutClick}>
+                    Log out
+                  </button>
+                </>
+              ) : (
+                <button className="navbar-auth-btn" onClick={handleLoginClick}>
+                  <FaUserCircle size={16} /> Login / Sign up
+                </button>
+              )}
+            </div>
           </nav>
-          <p className="navbar-drawer-footer">© 2025 ChartVault</p>
+          <p className="navbar-drawer-footer">© 2025 MKR Tools & Softwares</p>
         </div>
 
         {isOpen && <div className="navbar-overlay" onClick={() => setIsOpen(false)} />}

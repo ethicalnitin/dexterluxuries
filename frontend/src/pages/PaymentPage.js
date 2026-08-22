@@ -1,35 +1,53 @@
-import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 
-const WHATSAPP_NUMBER = "919289847981";
+const WHATSAPP_NUMBER = "+12403013547";
+const BRAND_NAME = "MKR Tools & Softwares";
 
-// ── Payment config ────────────────────────────────────────────────────────
+// ── UPI config ───────────────────────────────────────────────────────────
 const UPI_ID = "paytm.s2znhpg@pty";
-const PAYEE_NAME = "ChartVault";
+const PAYEE_NAME = "MKR Tools & Softwares";
 const QR_IMAGE_URL = "https://i.ibb.co/cSFGRFqY/image.png";
-const PAYMENT_WINDOW_SECONDS = 10 * 60; // 10 minutes
 
-// Backend base URL. Leave empty when the Express server serves the React
-// build itself (see index.js — express.static + catch-all), since then
-// "/api/deposit" is same-origin. If you ever split frontend/backend across
-// two hosts, set this to the backend's full origin instead, e.g.
-// "https://dexterluxuries.onrender.com".
-const API_BASE = "";
+// ── Crypto config ────────────────────────────────────────────────────────
+// TODO: replace with your real BEP20 wallet address before going live.
+const CRYPTO_WALLET_ADDRESS = "0xYOUR_BEP20_WALLET_ADDRESS_HERE";
+const CRYPTO_CHAIN_LABEL = "USDT · BEP20 (BNB Smart Chain)";
+
+const PAYMENT_WINDOW_SECONDS = 10 * 60; // 10 minutes, starts once they reach the pay screen
+
+// Backend base URL. Leave empty when Express serves the React build itself
+// (same-origin). Set to the backend's full origin if frontend/backend are
+// ever split across two hosts.
+const API_BASE = "http://localhost:3046";
+
+// ── Country codes for the phone field ─────────────────────────────────────
+// NOTE: server.js's /api/orders/notify only validates India-format numbers
+// (10 digits, or 12 digits starting with "91"). Numbers submitted under any
+// other country code here will pass this page's own validation but will be
+// rejected by the backend when "Payment completed" / "I've paid" is clicked.
+// Keep +91 as default until the backend regex is updated to support others.
+const COUNTRY_CODES = [
+  { dial: "+91", label: "IN +91" },
+  { dial: "+1", label: "US +1" },
+  { dial: "+44", label: "UK +44" },
+  { dial: "+971", label: "AE +971" },
+  { dial: "+61", label: "AU +61" },
+  { dial: "+65", label: "SG +65" },
+];
 // ─────────────────────────────────────────────────────────────────────────
-
-function getHashParams() {
-  const hash = window.location.hash;
-  const queryStart = hash.indexOf("?");
-  if (queryStart === -1) return new URLSearchParams("");
-  return new URLSearchParams(hash.slice(queryStart + 1));
-}
 
 function formatINR(amount) {
   const num = Number(amount);
   if (isNaN(num)) return null;
-  return num.toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  return num.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function formatUSD(amount) {
+  const num = Number(amount);
+  if (isNaN(num)) return null;
+  return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatMMSS(totalSeconds) {
@@ -46,1098 +64,490 @@ function makeOrderRef() {
   return `DX-${suffix}`;
 }
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// Loose check used only to decide when to reveal the price and enable
+// Continue — length-based, not country-specific. Actual backend acceptance
+// still depends on the India-only rule noted above.
+function isPhoneLongEnough(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 12;
+}
 
 export default function PaymentPage() {
-  const [step, setStep] = useState(1); // 1 = pay, 2 = confirm, 3 = done
-  const [copied, setCopied] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, token, isReady, isAuthenticated } = useAuth();
+
+  // Data passed from ProductPage.js via navigate("/payment", { state: {...} })
+  const orderData = location.state || null;
+
   const [orderRef] = useState(makeOrderRef);
 
-  // ── Step 2 form state ─────────────────────────────────────────────────
-  const [identifier, setIdentifier] = useState(""); // email or username
-  const [utr, setUtr] = useState("");
-  const [screenshot, setScreenshot] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef(null);
+  // phase: 'review' -> 'method' -> 'upi' | 'crypto' -> 'delivery'
+  const [phase, setPhase] = useState("review");
+
+  const [countryDial, setCountryDial] = useState("+91");
+  const [phone, setPhone] = useState("");
+  const [reviewError, setReviewError] = useState("");
+
+  // Which method the buyer actually picked — determines which currency
+  // the summary and delivery screen show.
+  const [selectedMethod, setSelectedMethod] = useState(null); // 'UPI' | 'CRYPTO'
+
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [copiedWallet, setCopiedWallet] = useState(false);
+
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
+
+  // ── Guards ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isReady) return;
+    if (!isAuthenticated || !orderData) {
+      navigate("/", { replace: true });
+    }
+  }, [isReady, isAuthenticated, orderData, navigate]);
 
   // ── Scroll fixes ─────────────────────────────────────────────────────
-  // The route uses a hash with query params (e.g. "#/payment?amount=..."),
-  // and some browsers treat anything after "#" as an anchor target and
-  // auto-scroll to it on load. Force the viewport back to the top before
-  // the first paint so the page never lands mid-scroll.
   useLayoutEffect(() => {
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
     window.scrollTo(0, 0);
   }, []);
 
-  // Every time the step changes (Pay → Confirm → Done), bring the top of
-  // the page back into view instead of leaving the scroll wherever the
-  // previous step happened to be — otherwise the new step's content (e.g.
-  // the confirmation form) can render below the fold.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step]);
+  }, [phase]);
 
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
+  const displayAmount = orderData?.amount != null ? formatINR(orderData.amount) : null; // INR
+  const displayAmountUSD = orderData?.amountUSD != null ? formatUSD(orderData.amountUSD) : null; // USD
+  const productName = orderData?.productName || "Product";
+  const planName = orderData?.planName || null;
 
-  const urlParams = useMemo(() => {
-    const params = getHashParams();
-    const rawAmt = params.get("amount") || "";
-    const rawName = params.get("productName") || "";
+  const phoneEntered = isPhoneLongEnough(phone);
 
-    let productName = "";
-    try {
-      productName = decodeURIComponent(rawName.replace(/\+/g, " "));
-    } catch {
-      productName = rawName;
-    }
+  // ── Which currency the order summary shows, driven by phase + choices ──
+  // review:   hidden until a phone number is entered, then USD
+  // method:   USD (method not chosen yet)
+  // upi:      INR
+  // crypto:   USD
+  // delivery: whatever currency the chosen method used
+  const summaryCurrency =
+    phase === "review" ? (phoneEntered ? "USD" : null) :
+    phase === "method" ? "USD" :
+    phase === "upi" ? "INR" :
+    phase === "crypto" ? "USD" :
+    phase === "delivery" ? (selectedMethod === "UPI" ? "INR" : "USD") :
+    null;
 
-    const numericAmount = rawAmt && !isNaN(Number(rawAmt)) ? Number(rawAmt) : null;
-    const displayAmount = numericAmount !== null ? formatINR(numericAmount) : null;
+  const summaryAmountText =
+    summaryCurrency === "INR" ? (displayAmount !== null ? `₹${displayAmount}` : "—") :
+    summaryCurrency === "USD" ? (displayAmountUSD !== null ? `$${displayAmountUSD}` : "—") :
+    null; // null -> render the placeholder instead
 
-    return { numericAmount, displayAmount, productName };
-  }, []);
-
-  // ── 10-minute payment countdown ───────────────────────────────────────
-  const [deadline] = useState(() => Date.now() + PAYMENT_WINDOW_SECONDS * 1000);
+  // ── 10-minute payment countdown ─────────────────────────────────────
+  const [deadline, setDeadline] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(PAYMENT_WINDOW_SECONDS);
 
   useEffect(() => {
-    const tick = () => {
-      const remaining = Math.round((deadline - Date.now()) / 1000);
-      setSecondsLeft(Math.max(0, remaining));
-    };
+    if ((phase === "upi" || phase === "crypto") && deadline === null) {
+      setDeadline(Date.now() + PAYMENT_WINDOW_SECONDS * 1000);
+    }
+  }, [phase, deadline]);
+
+  useEffect(() => {
+    if (deadline === null) return;
+    const tick = () => setSecondsLeft(Math.max(0, Math.round((deadline - Date.now()) / 1000)));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [deadline]);
 
-  const expired = step === 1 && secondsLeft <= 0;
-  const urgent = step === 1 && !expired && secondsLeft <= 60;
+  const expired = (phase === "upi" || phase === "crypto") && deadline !== null && secondsLeft <= 0;
+  const urgent = (phase === "upi" || phase === "crypto") && !expired && secondsLeft <= 60;
   const progressPct = Math.max(0, Math.min(100, (secondsLeft / PAYMENT_WINDOW_SECONDS) * 100));
-  // ─────────────────────────────────────────────────────────────────────
 
-  const upiDeepLink = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("pa", UPI_ID);
-    params.set("pn", PAYEE_NAME);
-    if (urlParams.numericAmount !== null) {
-      params.set("am", String(urlParams.numericAmount));
-    }
-    params.set("cu", "INR");
-    params.set("tn", urlParams.productName || "Payment");
-    return `upi://pay?${params.toString()}`;
-  }, [urlParams]);
+  // ── UPI deep links ───────────────────────────────────────────────────
+  const buildUpiLink = useCallback(
+    (scheme) => {
+      const params = new URLSearchParams();
+      params.set("pa", UPI_ID);
+      params.set("pn", PAYEE_NAME);
+      if (orderData?.amount != null) params.set("am", String(orderData.amount));
+      params.set("cu", "INR");
+      params.set("tn", productName || "Payment");
+      return `${scheme}?${params.toString()}`;
+    },
+    [orderData, productName]
+  );
 
-  function handlePayNow() {
-    if (expired) return;
-    window.location.href = upiDeepLink;
+  const genericUpiLink = useMemo(() => buildUpiLink("upi://pay"), [buildUpiLink]);
+  const gpayLink = useMemo(() => buildUpiLink("tez://upi/pay"), [buildUpiLink]);
+  const phonepeLink = useMemo(() => buildUpiLink("phonepe://pay"), [buildUpiLink]);
+
+  function handleCopy(text, setFlag) {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setFlag(true);
+      setTimeout(() => setFlag(false), 1800);
+    });
   }
 
-  function handleCopyUpi() {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(UPI_ID).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1800);
-      });
-    }
-  }
+  const openWhatsApp = useCallback(
+    (extraLine) => {
+      const amountLine =
+        selectedMethod === "UPI"
+          ? (displayAmount !== null ? `Amount: Rs. ${displayAmount}` : null)
+          : (displayAmountUSD !== null ? `Amount: $${displayAmountUSD}` : null);
+      const lines = [
+        `Hi, I'd like to place an order on ${BRAND_NAME}.`,
+        ``,
+        `Product: ${productName}`,
+        planName ? `Plan: ${planName}` : null,
+        amountLine,
+        `Order ref: ${orderRef}`,
+        user?.email ? `Account: ${user.email}` : null,
+        extraLine || null,
+      ]
+        .filter((l) => l !== null)
+        .join("\n");
+      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines)}`, "_blank");
+    },
+    [productName, planName, displayAmount, displayAmountUSD, selectedMethod, orderRef, user]
+  );
 
-  const buildWhatsAppMessage = useCallback(() => {
-    const lines = [
-      `Hi, I'd like to place an order on ChartVault.`,
-      ``,
-      urlParams.productName ? `Product: ${urlParams.productName}` : null,
-      urlParams.displayAmount !== null ? `Amount: Rs. ${urlParams.displayAmount}` : null,
-      `Order ref: ${orderRef}`,
-      utr.trim() ? `UTR: ${utr.trim()}` : null,
-      identifier.trim() ? `Account: ${identifier.trim()}` : null,
-      ``,
-      step === 3
-        ? `I've submitted my payment proof — please confirm and activate my order.`
-        : `Please assist me with payment. Thank you!`,
-    ]
-      .filter((l) => l !== null)
-      .join("\n");
-    return lines;
-  }, [urlParams, orderRef, utr, identifier, step]);
-
-  const openWhatsApp = useCallback(() => {
-    window.open(
-      `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(buildWhatsAppMessage())}`,
-      "_blank"
-    );
-  }, [buildWhatsAppMessage]);
-
-  // ── Step 2: file handling ───────────────────────────────────────────
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setFormError("Only JPG, PNG, WEBP or GIF screenshots are allowed.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setFormError("Screenshot must be under 10MB.");
-      return;
-    }
-
-    setFormError("");
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setScreenshot(file);
-    setPreviewUrl(URL.createObjectURL(file));
-  }
-
-  function handleRemoveScreenshot() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setScreenshot(null);
-    setPreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  // ── Step 2: submit proof to backend → Telegram ───────────────────────
-  async function handleSubmitProof(e) {
+  function handleReviewContinue(e) {
     e.preventDefault();
-    setFormError("");
+    if (!phoneEntered) {
+      setReviewError("Enter a valid phone number to continue.");
+      return;
+    }
+    setReviewError("");
+    setPhase("method");
+  }
 
-    if (!identifier.trim() || identifier.trim().length < 3) {
-      setFormError("Enter the email or username you used to sign up.");
-      return;
-    }
-    if (!utr.trim() || utr.trim().length < 6) {
-      setFormError("That UTR / transaction ID looks too short — double-check and re-enter it.");
-      return;
-    }
-    if (!screenshot) {
-      setFormError("Attach a screenshot of the payment confirmation.");
-      return;
-    }
+  function chooseMethod(method) {
+    setSelectedMethod(method);
+    setPhase(method === "UPI" ? "upi" : "crypto");
+  }
 
-    setSubmitting(true);
+  async function notifyOrder(method) {
+    setConfirming(true);
+    setConfirmError("");
     try {
-      const fd = new FormData();
-      fd.append("email", identifier.trim());
-      fd.append("utr", utr.trim());
-      fd.append("screenshot", screenshot);
-      if (urlParams.numericAmount !== null) fd.append("amount", String(urlParams.numericAmount));
-      fd.append("method", "UPI");
-      if (urlParams.productName) fd.append("productName", urlParams.productName);
-      fd.append("orderRef", orderRef);
-
-      const res = await fetch(`${API_BASE}/api/deposit`, { method: "POST", body: fd });
+      const fullPhone = `${countryDial}${phone.replace(/\D/g, "")}`;
+      const res = await fetch(`${API_BASE}/api/orders/notify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productId: orderData?.productId,
+          productName,
+          amount: method === "UPI" ? orderData?.amount : orderData?.amountUSD,
+          email: user?.email,
+          phone: fullPhone,
+          method,
+        }),
+      });
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data.error || "Something went wrong. Please try again.");
-      }
-
-      setStep(3);
+      if (!res.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+      setPhase("delivery");
     } catch (err) {
-      setFormError(err.message || "Couldn't submit — check your connection and try again.");
+      setConfirmError(err.message || "Couldn't confirm with our system — please message us on WhatsApp to be safe.");
+      setPhase("delivery");
     } finally {
-      setSubmitting(false);
+      setConfirming(false);
     }
   }
 
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --ink: #08090C;
-      --panel: #14161C;
-      --panel-2: #1B1E26;
-      --gold: #C9A876;
-      --gold-soft: #E8D9B8;
-      --text: #F3F1EA;
-      --text-dim: rgba(243,241,234,.52);
-      --text-faint: rgba(243,241,234,.28);
-      --line: rgba(243,241,234,.12);
+      --bg: #F6F7F9;
+      --surface: #FFFFFF;
+      --surface-2: #FAFBFC;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-dim: #475467;
+      --text-faint: #98A2B3;
+      --accent: #3958E9;
+      --accent-hover: #2F49CC;
+      --accent-soft: #EEF1FE;
+      --success: #16A34A;
+      --success-soft: #EEFBF3;
+      --danger: #DC2626;
+      --danger-soft: #FEF2F2;
       --wa: #25D366;
-      --danger: #E2645A;
+      --radius: 12px;
     }
 
-    body { background: var(--ink); }
+    body { background: var(--bg); }
 
     .page {
-      min-height: 100vh;
-      background: var(--ink);
+      min-height: 100dvh;
+      background: var(--bg);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       padding: 48px 16px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .page::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse 60% 45% at 50% 0%, rgba(201,168,118,.08) 0%, transparent 68%);
-      pointer-events: none;
     }
 
     .wrap {
       width: 100%;
-      max-width: 620px;
-      position: relative;
-      z-index: 1;
-      animation: rise .6s cubic-bezier(.22,1,.36,1) both;
+      max-width: 480px;
+      animation: rise .35s ease both;
     }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    .brandbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .brand { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
+    .brand-sub { display: flex; align-items: center; gap: 6px; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 500; color: var(--text-faint); }
+    .brand-sub svg { width: 13px; height: 13px; color: var(--text-faint); }
 
-    .brandbar {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      margin-bottom: 18px;
-      padding: 0 4px;
-    }
-
-    .brand {
-      font-family: 'Fraunces', serif;
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: var(--text);
-      letter-spacing: .2px;
-    }
-
-    .brand em {
-      font-style: normal;
-      color: var(--gold);
-    }
-
-    .brand-sub {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: 'Inter', sans-serif;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 1.6px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-    }
-
-    .brand-sub svg { width: 11px; height: 11px; color: var(--gold); }
-
-    /* ---------- Stepper ---------- */
-    .stepper {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      margin-bottom: 22px;
-      padding: 0 2px;
-    }
-
-    .step-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
+    .stepper { display: flex; align-items: center; margin-bottom: 20px; }
+    .step-item { display: flex; align-items: center; gap: 7px; }
     .step-dot {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1.5px solid var(--line);
-      color: var(--text-faint);
-      flex-shrink: 0;
-      transition: all .25s ease;
+      width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 700;
+      border: 1.5px solid var(--border-strong); color: var(--text-faint); flex-shrink: 0; transition: all .2s ease; background: var(--surface);
     }
-
-    .step-item.is-active .step-dot {
-      border-color: var(--gold);
-      color: var(--gold);
-      background: rgba(201,168,118,.1);
-    }
-
-    .step-item.is-done .step-dot {
-      border-color: var(--gold);
-      background: var(--gold);
-      color: #14161C;
-    }
-
+    .step-item.is-active .step-dot { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .step-item.is-done .step-dot { border-color: var(--accent); background: var(--accent); color: #fff; }
     .step-item.is-done .step-dot svg { width: 11px; height: 11px; }
-
-    .step-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-faint);
-      letter-spacing: .3px;
-      white-space: nowrap;
-    }
-
-    .step-item.is-active .step-label,
+    .step-label { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--text-faint); white-space: nowrap; }
+    .step-item.is-active .step-label { color: var(--text); font-weight: 600; }
     .step-item.is-done .step-label { color: var(--text-dim); }
+    .step-connector { flex: 1; height: 1px; background: var(--border); margin: 0 10px; }
 
-    .step-connector {
-      flex: 1;
-      height: 1px;
-      background: var(--line);
-      margin: 0 10px;
-      position: relative;
-      top: -10px;
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.04); overflow: hidden;
     }
 
-    /* ---------- Ticket card ---------- */
-    .ticket {
-      display: flex;
-      flex-direction: column;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: 0 40px 90px rgba(0,0,0,.55);
-      overflow: hidden;
+    .order-summary { padding: 20px 24px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+    .order-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .order-name { font-family: 'Inter', sans-serif; font-size: 14.5px; font-weight: 600; color: var(--text); }
+    .order-plan { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .order-amount { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; color: var(--text); white-space: nowrap; }
+    .order-amount--placeholder { font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 500; color: var(--text-faint); }
+    .order-meta-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+    .order-meta-key { font-family: 'Inter', sans-serif; font-size: 11.5px; color: var(--text-faint); }
+    .order-meta-val { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--text-dim); }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 5px; margin-top: 10px;
+      padding: 3px 9px; border-radius: 20px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+      background: var(--accent-soft); color: var(--accent);
     }
+    .status-pill.status-pill--done { background: var(--success-soft); color: var(--success); }
+    .status-pill svg { width: 10px; height: 10px; }
 
-    @media (min-width: 680px) {
-      .ticket { flex-direction: row; }
-    }
+    .main { padding: 24px; }
 
-    .stub {
-      flex: 0 0 auto;
-      padding: 30px 28px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    @media (min-width: 680px) {
-      .stub { width: 226px; }
-    }
-
-    .stub-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      margin-bottom: 10px;
-    }
-
-    .stub-name {
-      font-family: 'Fraunces', serif;
-      font-size: 1.15rem;
-      font-weight: 500;
-      color: var(--text);
-      line-height: 1.3;
-      margin-bottom: 22px;
-    }
-
-    .stub-amount-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      margin-bottom: 6px;
-    }
-
-    .stub-amount {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 2.15rem;
-      font-weight: 600;
-      color: var(--gold-soft);
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-      margin-bottom: auto;
-    }
-
-    .stub-meta {
-      margin-top: 26px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .stub-meta-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .stub-meta-key {
-      font-family: 'Inter', sans-serif;
-      font-size: 10px;
-      color: var(--text-faint);
-      letter-spacing: .3px;
-    }
-
-    .stub-meta-val {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--text-dim);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .stub-status {
-      margin-top: 14px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      align-self: flex-start;
-      padding: 4px 9px;
-      border-radius: 20px;
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5px;
-      font-weight: 700;
-      letter-spacing: .4px;
-      text-transform: uppercase;
-      background: rgba(201,168,118,.12);
-      color: var(--gold-soft);
-    }
-
-    .stub-status.stub-status--done {
-      background: rgba(37,211,102,.12);
-      color: var(--wa);
-    }
-
-    .stub-status svg { width: 10px; height: 10px; }
-
-    /* ---------- Perforated divider ---------- */
-    .perf {
-      position: relative;
-      flex-shrink: 0;
-      background-image: repeating-linear-gradient(
-        to bottom, var(--line) 0 6px, transparent 6px 14px
-      );
-      width: 1px;
-      display: none;
-    }
-
-    @media (min-width: 680px) {
-      .perf { display: block; }
-    }
-
-    .perf-notch {
-      position: absolute;
-      left: 50%;
-      width: 18px;
-      height: 18px;
-      background: var(--ink);
-      border-radius: 50%;
-      transform: translateX(-50%);
-    }
-
-    .perf-notch--top { top: -9px; }
-    .perf-notch--bottom { bottom: -9px; }
-
-    .perf-h {
-      position: relative;
-      height: 1px;
-      background-image: repeating-linear-gradient(
-        to right, var(--line) 0 6px, transparent 6px 14px
-      );
-    }
-
-    @media (min-width: 680px) {
-      .perf-h { display: none; }
-    }
-
-    .perf-h-notch {
-      position: absolute;
-      top: 50%;
-      width: 18px;
-      height: 18px;
-      background: var(--ink);
-      border-radius: 50%;
-      transform: translateY(-50%);
-    }
-
-    .perf-h-notch--left { left: -9px; }
-    .perf-h-notch--right { right: -9px; }
-
-    /* ---------- Main section ---------- */
-    .main {
-      flex: 1;
-      padding: 30px 30px 26px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .timer { margin-bottom: 22px; }
-
-    .timer-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-
-    .timer-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: 'Inter', sans-serif;
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-
-    .timer-label svg { width: 12px; height: 12px; color: var(--text-faint); }
-
-    .timer-value {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--gold-soft);
-      font-variant-numeric: tabular-nums;
-      letter-spacing: .5px;
-    }
-
-    .timer.timer--urgent .timer-value { color: var(--danger); }
-    .timer.timer--expired .timer-value { color: var(--danger); }
-
-    .timer-track {
-      height: 3px;
-      background: var(--line);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
-    .timer-fill {
-      height: 100%;
-      background: var(--gold);
-      border-radius: 3px;
-      transition: width 1s linear, background .3s;
-    }
-
-    .timer--urgent .timer-fill { background: var(--danger); }
-    .timer--expired .timer-fill { background: var(--danger); }
-
-    .scan-block {
-      display: flex;
-      gap: 20px;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-
-    .scan-frame {
-      position: relative;
-      flex-shrink: 0;
-      width: 128px;
-      height: 128px;
-      background: #fff;
-      border-radius: 10px;
-      padding: 8px;
-    }
-
-    .scan-frame img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      border-radius: 3px;
-      display: block;
-    }
-
-    .scan-frame.scan-frame--expired img {
-      opacity: .2;
-      filter: grayscale(1);
-    }
-
-    .scan-corner {
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--gold);
-    }
-
-    .scan-corner--tl { top: -6px; left: -6px; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
-    .scan-corner--tr { top: -6px; right: -6px; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }
-    .scan-corner--bl { bottom: -6px; left: -6px; border-right: none; border-top: none; border-radius: 0 0 0 4px; }
-    .scan-corner--br { bottom: -6px; right: -6px; border-left: none; border-top: none; border-radius: 0 0 4px 0; }
-
-    .scan-expired-tag {
-      position: absolute;
-      inset: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(8,9,12,.78);
-      border-radius: 3px;
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5px;
-      font-weight: 700;
-      letter-spacing: .6px;
-      text-transform: uppercase;
-      text-align: center;
-      padding: 6px;
-    }
-
-    .scan-info {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .scan-info-title {
-      font-family: 'Inter', sans-serif;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .scan-info-sub {
-      font-family: 'Inter', sans-serif;
-      font-size: 11.5px;
-      color: var(--text-dim);
-      line-height: 1.5;
-    }
-
-    .upi-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      align-self: flex-start;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      padding: 6px 10px;
-      cursor: pointer;
-      transition: border-color .2s, background .2s;
-    }
-
-    .upi-chip:hover { border-color: rgba(201,168,118,.4); }
-
-    .upi-chip-text {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11.5px;
-      color: var(--text);
-    }
-
-    .upi-chip svg { width: 12px; height: 12px; color: var(--gold); flex-shrink: 0; }
-
-    .copied-note {
-      font-family: 'Inter', sans-serif;
-      font-size: 10.5px;
-      color: var(--gold);
-      margin-top: -4px;
-    }
-
-    /* ---------- Buttons ---------- */
-    .pay-btn {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      padding: 15px 20px;
-      background: var(--gold);
-      border: none;
-      border-radius: 9px;
-      color: #14161C;
-      font-family: 'Inter', sans-serif;
-      font-size: 13.5px;
-      font-weight: 700;
-      letter-spacing: .2px;
-      cursor: pointer;
-      transition: background .2s, transform .15s, box-shadow .2s, opacity .2s;
-      box-shadow: 0 14px 34px rgba(201,168,118,.18);
-    }
-
-    .pay-btn:hover { background: var(--gold-soft); transform: translateY(-1px); }
-    .pay-btn:active { transform: translateY(0); }
-    .pay-btn:disabled {
-      opacity: .35;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .pay-btn svg { width: 15px; height: 15px; }
-
-    .secondary-btn {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 13px 20px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      font-size: 12.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color .2s, background .2s;
-      margin-top: 10px;
-    }
-
-    .secondary-btn:hover { border-color: rgba(201,168,118,.4); background: rgba(201,168,118,.06); }
-    .secondary-btn svg { width: 14px; height: 14px; }
-
-    .divider-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 16px 0;
-    }
-
-    .divider-line { flex: 1; height: 1px; background: var(--line); }
-
-    .divider-text {
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5px;
-      font-weight: 600;
-      letter-spacing: 1.6px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-    }
-
-    .wa-btn {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      padding: 12.5px 20px;
-      background: transparent;
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      color: var(--text-dim);
-      font-family: 'Inter', sans-serif;
-      font-size: 12.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color .2s, color .2s, background .2s;
-    }
-
-    .wa-btn:hover {
-      border-color: rgba(37,211,102,.4);
-      color: var(--wa);
-      background: rgba(37,211,102,.05);
-    }
-
-    .wa-btn.wa-btn--solid {
-      background: var(--wa);
-      border-color: var(--wa);
-      color: #08090C;
-      font-weight: 700;
-    }
-
-    .wa-btn.wa-btn--solid:hover { background: #2fe07a; }
-
-    .wa-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
-
-    .status-note {
-      margin-top: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      font-family: 'Inter', sans-serif;
-      font-size: 11px;
-    }
-
-    .status-note--ok { color: var(--wa); }
-    .status-note--danger { color: var(--danger); }
-    .status-note svg { width: 13px; height: 13px; flex-shrink: 0; }
-
-    /* ---------- Step 2: form ---------- */
     .form-head { margin-bottom: 18px; }
-
-    .form-title {
-      font-family: 'Fraunces', serif;
-      font-size: 1.25rem;
-      font-weight: 500;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-
-    .form-sub {
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      color: var(--text-dim);
-      line-height: 1.5;
-    }
+    .form-title { font-family: 'Inter', sans-serif; font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -.2px; margin-bottom: 4px; }
+    .form-sub { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 
     .form-group { margin-bottom: 16px; }
-
-    .form-label {
-      display: block;
-      font-family: 'Inter', sans-serif;
-      font-size: 10.5px;
-      font-weight: 600;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      margin-bottom: 7px;
-    }
-
+    .form-label { display: block; font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
     .form-input {
-      width: 100%;
-      padding: 12px 14px;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      transition: border-color .2s;
+      width: 100%; padding: 11px 13px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+      color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; transition: border-color .15s, box-shadow .15s;
     }
-
     .form-input::placeholder { color: var(--text-faint); }
-    .form-input:focus {
-      outline: none;
-      border-color: var(--gold);
+    .form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .form-input:disabled { background: var(--surface-2); color: var(--text-dim); }
+    .form-input--mono { font-family: 'IBM Plex Mono', monospace; }
+
+    .phone-row { display: flex; gap: 8px; }
+    .phone-country {
+      flex: 0 0 108px; padding: 11px 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+      color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; cursor: pointer; transition: border-color .15s;
     }
-
-    .form-input--mono { font-family: 'IBM Plex Mono', monospace; letter-spacing: .3px; }
-
-    .file-field {
-      border: 1.5px dashed var(--line);
-      border-radius: 10px;
-      padding: 16px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color .2s, background .2s;
-    }
-
-    .file-field:hover { border-color: rgba(201,168,118,.5); background: rgba(201,168,118,.04); }
-
-    .file-field svg { width: 20px; height: 20px; color: var(--gold); margin-bottom: 6px; }
-
-    .file-field-text {
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      color: var(--text-dim);
-    }
-
-    .file-field-hint {
-      font-family: 'Inter', sans-serif;
-      font-size: 10.5px;
-      color: var(--text-faint);
-      margin-top: 3px;
-    }
-
-    .file-preview {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px;
-      background: var(--panel-2);
-    }
-
-    .file-preview img {
-      width: 52px;
-      height: 52px;
-      object-fit: cover;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-
-    .file-preview-name {
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      color: var(--text);
-      word-break: break-all;
-    }
-
-    .file-preview-remove {
-      margin-left: auto;
-      background: none;
-      border: none;
-      color: var(--text-faint);
-      font-family: 'Inter', sans-serif;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      flex-shrink: 0;
-      padding: 6px 8px;
-    }
-
-    .file-preview-remove:hover { color: var(--danger); }
+    .phone-country:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .phone-row .form-input { flex: 1; min-width: 0; }
+    .field-hint { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
 
     .form-error {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      background: rgba(226,100,90,.1);
-      border: 1px solid rgba(226,100,90,.3);
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin-bottom: 16px;
-      font-family: 'Inter', sans-serif;
-      font-size: 12px;
-      color: #F2A79F;
-      line-height: 1.5;
+      display: flex; align-items: flex-start; gap: 8px; background: var(--danger-soft); border: 1px solid #FECACA;
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-family: 'Inter', sans-serif; font-size: 12.5px; color: #B91C1C; line-height: 1.5;
     }
-
     .form-error svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
 
     .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: none;
-      border: none;
-      color: var(--text-faint);
-      font-family: 'Inter', sans-serif;
-      font-size: 11.5px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-bottom: 16px;
-      align-self: flex-start;
-      padding: 0;
+      display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: var(--text-faint);
+      font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; margin-bottom: 16px; padding: 0;
     }
-
     .back-link:hover { color: var(--text-dim); }
-    .back-link svg { width: 12px; height: 12px; }
+    .back-link svg { width: 13px; height: 13px; }
 
-    .submit-btn { position: relative; }
-
-    .spinner {
-      width: 15px;
-      height: 15px;
-      border: 2px solid rgba(20,22,28,.3);
-      border-top-color: #14161C;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
+    .btn-primary {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px;
+      background: var(--accent); border: none; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s, transform .1s;
     }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary svg { width: 15px; height: 15px; }
 
+    .btn-secondary {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 20px;
+      background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer;
+      transition: border-color .15s, background .15s; margin-top: 8px;
+    }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary svg { width: 14px; height: 14px; }
+
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+    .spinner--dark { border: 2px solid rgba(16,24,40,.15); border-top-color: var(--text-dim); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ---------- Step 3: success ---------- */
-    .success-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      padding: 10px 4px 4px;
+    .method-grid { display: flex; flex-direction: column; gap: 10px; }
+    .method-card {
+      display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+      background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 14px 16px;
+      cursor: pointer; transition: border-color .15s, background .15s; color: var(--text); font-family: 'Inter', sans-serif;
     }
+    .method-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .method-icon {
+      width: 38px; height: 38px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent);
+    }
+    .method-icon svg { width: 18px; height: 18px; }
+    .method-text { flex: 1; min-width: 0; }
+    .method-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .method-sub { font-size: 11.5px; color: var(--text-dim); }
+    .method-arrow { color: var(--text-faint); flex-shrink: 0; }
+    .method-arrow svg { width: 15px; height: 15px; }
 
+    .timer { margin-bottom: 18px; }
+    .timer-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    .timer-label { display: flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-dim); }
+    .timer-label svg { width: 12px; height: 12px; color: var(--text-faint); }
+    .timer-value { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .timer.timer--urgent .timer-value { color: var(--danger); }
+    .timer.timer--expired .timer-value { color: var(--danger); }
+    .timer-track { height: 4px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .timer-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 1s linear, background .3s; }
+    .timer--urgent .timer-fill { background: var(--danger); }
+    .timer--expired .timer-fill { background: var(--danger); }
+
+    .scan-block { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+    .scan-frame { flex-shrink: 0; width: 92px; height: 92px; background: #fff; border-radius: 10px; padding: 6px; border: 1px solid var(--border-strong); }
+    .scan-frame img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; display: block; }
+    .scan-frame--expired img { opacity: .2; filter: grayscale(1); }
+    .scan-info { display: flex; flex-direction: column; gap: 9px; min-width: 0; padding-top: 2px; }
+    .scan-info-title { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: var(--text); }
+    .scan-info-sub { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+    .upi-chip {
+      display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; cursor: pointer; transition: border-color .15s;
+    }
+    .upi-chip:hover { border-color: var(--accent); }
+    .upi-chip-text { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--text); }
+    .upi-chip svg { width: 12px; height: 12px; color: var(--text-dim); flex-shrink: 0; }
+    .copied-note { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--success); }
+
+    .app-btn-row { display: flex; gap: 10px; margin-bottom: 8px; }
+    .app-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 10px;
+      background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .app-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+    .app-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .divider-row { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
+    .divider-line { flex: 1; height: 1px; background: var(--border); }
+    .divider-text { font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); }
+
+    .status-note { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: 'Inter', sans-serif; font-size: 12px; }
+    .status-note--danger { color: var(--danger); }
+    .status-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+    .chain-badge {
+      display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft);
+      color: var(--accent); font-family: 'IBM Plex Mono', monospace;
+      font-size: 11.5px; font-weight: 600; padding: 6px 11px; border-radius: 7px; margin-bottom: 14px;
+    }
+    .chain-badge svg { width: 13px; height: 13px; }
+
+    .wallet-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+    .wallet-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 8px; }
+    .wallet-address-row { display: flex; align-items: center; gap: 10px; }
+    .wallet-address { flex: 1; min-width: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--text); word-break: break-all; line-height: 1.5; }
+    .wallet-copy-btn {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--accent); border: none; border-radius: 7px; color: #fff; font-family: 'Inter', sans-serif;
+      font-size: 11.5px; font-weight: 600; padding: 8px 12px; cursor: pointer; transition: background .15s;
+    }
+    .wallet-copy-btn:hover { background: var(--accent-hover); }
+
+    .crypto-warning {
+      display: flex; align-items: flex-start; gap: 8px; background: var(--danger-soft); border: 1px solid #FECACA;
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-family: 'Inter', sans-serif; font-size: 12px;
+      color: #B91C1C; line-height: 1.55;
+    }
+    .crypto-warning svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+    .crypto-warning b { color: #991B1B; }
+
+    .success-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 6px 4px 4px; }
     .success-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: rgba(37,211,102,.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 18px;
-      animation: pop .5s cubic-bezier(.22,1,.36,1) both;
+      width: 52px; height: 52px; border-radius: 50%; background: var(--success-soft); display: flex; align-items: center;
+      justify-content: center; margin-bottom: 16px;
     }
-
-    @keyframes pop {
-      from { transform: scale(.6); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-
-    .success-icon svg { width: 26px; height: 26px; color: var(--wa); }
-
-    .success-title {
-      font-family: 'Fraunces', serif;
-      font-size: 1.35rem;
-      font-weight: 500;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    .success-sub {
-      font-family: 'Inter', sans-serif;
-      font-size: 12.5px;
-      color: var(--text-dim);
-      line-height: 1.6;
-      max-width: 340px;
-      margin-bottom: 22px;
-    }
-
-    .success-sub b { color: var(--gold-soft); font-weight: 600; }
-
-    .success-actions { width: 100%; max-width: 320px; }
-
-    .success-meta {
-      display: flex;
-      gap: 18px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
+    .success-icon svg { width: 24px; height: 24px; color: var(--success); }
+    .success-title { font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -.2px; }
+    .success-sub { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); line-height: 1.6; max-width: 320px; margin-bottom: 22px; }
+    .success-sub b { color: var(--text); font-weight: 600; }
+    .success-actions { width: 100%; max-width: 300px; }
+    .success-meta { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
     .success-meta-item { text-align: center; }
+    .success-meta-key { font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 600; color: var(--text-faint); margin-bottom: 4px; }
+    .success-meta-val { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-dim); }
 
-    .success-meta-key {
-      font-family: 'Inter', sans-serif;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: var(--text-faint);
-      margin-bottom: 4px;
+    .wa-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 12px 20px;
+      background: var(--wa); border: none; border-radius: 8px; color: #fff;
+      font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background .15s;
     }
+    .wa-btn:hover { background: #1FB959; }
+    .wa-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-    .success-meta-val {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11.5px;
-      color: var(--text-dim);
+    .trust-line {
+      display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 20px;
+      font-family: 'Inter', sans-serif; font-size: 11.5px; color: var(--text-faint);
     }
-
-    /* ---------- Trust strip + footer ---------- */
-    .trust-strip {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 22px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-    }
-
-    .trust-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: 'Inter', sans-serif;
-      font-size: 10px;
-      color: var(--text-faint);
-      letter-spacing: .3px;
-    }
-
-    .trust-item svg { width: 12px; height: 12px; color: var(--gold); }
-
-    .footer {
-      margin-top: 18px;
-      text-align: center;
-      font-family: 'Inter', sans-serif;
-      font-size: 9px;
-      letter-spacing: 1.6px;
-      text-transform: uppercase;
-      color: rgba(243,241,234,.15);
-    }
+    .trust-line svg { width: 12px; height: 12px; color: var(--text-faint); }
+    .footer { margin-top: 8px; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--text-faint); }
 
     @media (max-width: 400px) {
-      .scan-block { flex-direction: column; align-items: flex-start; }
-      .scan-frame { width: 112px; height: 112px; }
-      .trust-strip { gap: 14px 18px; }
       .step-label { display: none; }
+      .app-btn-row { flex-direction: column; }
+      .main { padding: 20px; }
+      .order-summary { padding: 16px 20px; }
+      .phone-country { flex-basis: 92px; }
     }
   `;
+
+  if (!isReady || !isAuthenticated || !orderData) {
+    return (
+      <div className="page">
+        <style>{css}</style>
+      </div>
+    );
+  }
+
+  const stepNumber = phase === "review" ? 1 : phase === "delivery" ? 3 : 2;
 
   return (
     <div className="page">
@@ -1145,35 +555,24 @@ export default function PaymentPage() {
 
       <div className="wrap">
         <div className="brandbar">
-          <div className="brand">
-            Chart<em>Vault</em>
-          </div>
+          <div className="brand">{BRAND_NAME}</div>
           <div className="brand-sub">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="5" y="11" width="14" height="9" rx="1.5" />
               <path d="M8 11V7a4 4 0 0 1 8 0v4" />
             </svg>
-            Secure Checkout
+            Secure checkout
           </div>
         </div>
 
-        {/* ---------- Stepper ---------- */}
         <div className="stepper">
-          {[
-            { n: 1, label: "Pay" },
-            { n: 2, label: "Confirm" },
-            { n: 3, label: "Done" },
-          ].map((s, i) => (
+          {[{ n: 1, label: "Review" }, { n: 2, label: "Pay" }, { n: 3, label: "Delivery" }].map((s, i) => (
             <React.Fragment key={s.n}>
-              <div className={`step-item ${step === s.n ? "is-active" : ""} ${step > s.n ? "is-done" : ""}`}>
+              <div className={`step-item ${stepNumber === s.n ? "is-active" : ""} ${stepNumber > s.n ? "is-done" : ""}`}>
                 <div className="step-dot">
-                  {step > s.n ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M5 12l5 5L19 7" />
-                    </svg>
-                  ) : (
-                    s.n
-                  )}
+                  {stepNumber > s.n ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5L19 7" /></svg>
+                  ) : s.n}
                 </div>
                 <span className="step-label">{s.label}</span>
               </div>
@@ -1182,307 +581,305 @@ export default function PaymentPage() {
           ))}
         </div>
 
-        <div className="ticket">
-          <div className="stub">
-            <div className="stub-label">Order</div>
-            <div className="stub-name">
-              {urlParams.productName || "ChartVault Product"}
-            </div>
-
-            <div className="stub-amount-label">Amount Due</div>
-            <div className="stub-amount">
-              {urlParams.displayAmount !== null ? `₹${urlParams.displayAmount}` : "—"}
-            </div>
-
-            <div className="stub-meta">
-              <div className="stub-meta-row">
-                <span className="stub-meta-key">Reference</span>
-                <span className="stub-meta-val">{orderRef}</span>
+        <div className="card">
+          <div className="order-summary">
+            <div className="order-row">
+              <div>
+                <div className="order-name">{productName}</div>
+                {planName && <div className="order-plan">{planName}</div>}
               </div>
-              <div className="stub-meta-row">
-                <span className="stub-meta-key">Method</span>
-                <span className="stub-meta-val">UPI</span>
-              </div>
+              {summaryAmountText !== null ? (
+                <div className="order-amount">{summaryAmountText}</div>
+              ) : (
+                <div className="order-amount--placeholder">Enter phone to view price</div>
+              )}
+            </div>
+            <div className="order-meta-row">
+              <span className="order-meta-key">Order reference</span>
+              <span className="order-meta-val">{orderRef}</span>
             </div>
 
-            {step === 2 && (
-              <div className="stub-status">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 3" />
-                </svg>
-                Awaiting proof
+            {(phase === "upi" || phase === "crypto") && (
+              <div className="status-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
+                Awaiting payment
               </div>
             )}
-            {step === 3 && (
-              <div className="stub-status stub-status--done">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M5 12l5 5L19 7" />
-                </svg>
-                Submitted
+            {phase === "delivery" && (
+              <div className="status-pill status-pill--done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5L19 7" /></svg>
+                Payment recorded
               </div>
             )}
-          </div>
-
-          <div className="perf-h">
-            <span className="perf-h-notch perf-h-notch--left" />
-            <span className="perf-h-notch perf-h-notch--right" />
-          </div>
-          <div className="perf">
-            <span className="perf-notch perf-notch--top" />
-            <span className="perf-notch perf-notch--bottom" />
           </div>
 
           <div className="main">
-            {/* ================= STEP 1: PAY ================= */}
-            {step === 1 && (
+            {/* ================= STEP 1: REVIEW ================= */}
+            {phase === "review" && (
               <>
+                <div className="form-head">
+                  <div className="form-title">Review your order</div>
+                  <div className="form-sub">Add a contact number to reveal the price and continue to payment.</div>
+                </div>
+
+                <form onSubmit={handleReviewContinue}>
+                  {reviewError && (
+                    <div className="form-error">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                      {reviewError}
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label className="form-label">Signed in as</label>
+                    <input className="form-input" type="text" value={user?.email || ""} disabled />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="phone">Phone number</label>
+                    <div className="phone-row">
+                      <select
+                        className="phone-country"
+                        value={countryDial}
+                        onChange={(e) => setCountryDial(e.target.value)}
+                        aria-label="Country code"
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c.dial} value={c.dial}>{c.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        id="phone"
+                        className="form-input form-input--mono"
+                        type="tel"
+                        placeholder="Mobile number"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        autoComplete="tel-national"
+                      />
+                    </div>
+                  
+                  </div>
+
+                  <button className="btn-primary" type="submit" disabled={!phoneEntered}>
+                    Continue to payment
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M9 6l6 6-6 6" /></svg>
+                  </button>
+                </form>
+              </>
+            )}
+
+            {/* ================= STEP 2a: METHOD SELECT ================= */}
+            {phase === "method" && (
+              <>
+                <button className="back-link" onClick={() => setPhase("review")} type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
+                  Back
+                </button>
+
+                <div className="form-head">
+                  <div className="form-title">Choose payment method</div>
+                  <div className="form-sub">UPI shows the price in rupees. Crypto shows the price in USDT.</div>
+                </div>
+
+                <div className="method-grid">
+                  <button className="method-card" onClick={() => chooseMethod("UPI")} type="button">
+                    <span className="method-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></svg>
+                    </span>
+                    <span className="method-text">
+                      <div className="method-title">UPI</div>
+                      <div className="method-sub">GPay, PhonePe, Paytm or any UPI app — price in ₹</div>
+                    </span>
+                    <span className="method-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M9 6l6 6-6 6" /></svg></span>
+                  </button>
+
+                  <button className="method-card" onClick={() => chooseMethod("CRYPTO")} type="button">
+                    <span className="method-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 012.5-2h.5a2.5 2.5 0 010 5H12a2.5 2.5 0 000 5h.5a2.5 2.5 0 002.5-2M12 6v1.5M12 16.5V18" /></svg>
+                    </span>
+                    <span className="method-text">
+                      <div className="method-title">Crypto (USDT)</div>
+                      <div className="method-sub">BEP20 network only — price in $</div>
+                    </span>
+                    <span className="method-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M9 6l6 6-6 6" /></svg></span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ================= STEP 2b: UPI PAY ================= */}
+            {phase === "upi" && (
+              <>
+                <button className="back-link" onClick={() => setPhase("method")} type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
+                  Change method
+                </button>
+
                 <div className={`timer ${expired ? "timer--expired" : urgent ? "timer--urgent" : ""}`}>
                   <div className="timer-top">
                     <span className="timer-label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 7v5l3 3" />
-                      </svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
                       {expired ? "Window expired" : "Payment window"}
                     </span>
                     {!expired && <span className="timer-value">{formatMMSS(secondsLeft)}</span>}
                   </div>
-                  <div className="timer-track">
-                    <div className="timer-fill" style={{ width: `${expired ? 0 : progressPct}%` }} />
-                  </div>
+                  <div className="timer-track"><div className="timer-fill" style={{ width: `${expired ? 0 : progressPct}%` }} /></div>
                 </div>
 
                 <div className="scan-block">
                   <div className={`scan-frame ${expired ? "scan-frame--expired" : ""}`}>
-                    <span className="scan-corner scan-corner--tl" />
-                    <span className="scan-corner scan-corner--tr" />
-                    <span className="scan-corner scan-corner--bl" />
-                    <span className="scan-corner scan-corner--br" />
                     <img src={QR_IMAGE_URL} alt="Scan to pay via UPI" />
-                    {expired && <div className="scan-expired-tag">Expired</div>}
                   </div>
-
                   <div className="scan-info">
-                    <div className="scan-info-title">Scan with any UPI app</div>
-                    <div className="scan-info-sub">GPay, PhonePe, Paytm, or your bank's app.</div>
-                    <div className="upi-chip" onClick={handleCopyUpi} role="button" tabIndex={0}>
+                    <div className="scan-info-title">Scan or tap to pay</div>
+                    <div className="scan-info-sub">Use any UPI app, or open GPay / PhonePe directly.</div>
+                    <div className="upi-chip" onClick={() => handleCopy(UPI_ID, setCopiedUpi)} role="button" tabIndex={0}>
                       <span className="upi-chip-text">{UPI_ID}</span>
-                      {copied ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M5 12l5 5L19 7" />
-                        </svg>
+                      {copiedUpi ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L19 7" /></svg>
                       ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="9" y="9" width="12" height="12" rx="2" />
-                          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
                       )}
                     </div>
-                    {copied && <div className="copied-note">Copied to clipboard</div>}
+                    {copiedUpi && <div className="copied-note">Copied to clipboard</div>}
                   </div>
                 </div>
 
-                <button className="pay-btn" onClick={handlePayNow} disabled={expired}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" />
-                  </svg>
-                  Pay Now{urlParams.displayAmount !== null ? ` — ₹${urlParams.displayAmount}` : ""}
-                </button>
-
-                <button className="secondary-btn" onClick={() => setStep(2)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M5 12l5 5L19 7" />
-                  </svg>
-                  I've completed the payment
-                </button>
-
-                <div className="divider-row">
-                  <div className="divider-line" />
-                  <div className="divider-text">or</div>
-                  <div className="divider-line" />
+                <div className="app-btn-row">
+                  <button className="app-btn" disabled={expired} onClick={() => (window.location.href = gpayLink)}>
+                    Google Pay
+                  </button>
+                  <button className="app-btn" disabled={expired} onClick={() => (window.location.href = phonepeLink)}>
+                    PhonePe
+                  </button>
                 </div>
 
-                <button className="wa-btn" onClick={openWhatsApp}>
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347" />
-                  </svg>
-                  Continue on WhatsApp instead
+                <button className="btn-primary" disabled={expired} onClick={() => (window.location.href = genericUpiLink)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" /></svg>
+                  Pay via UPI app{displayAmount !== null ? ` — ₹${displayAmount}` : ""}
+                </button>
+
+                <div className="divider-row"><div className="divider-line" /><div className="divider-text">Then</div><div className="divider-line" /></div>
+
+                <button className="btn-secondary" disabled={expired || confirming} onClick={() => notifyOrder("UPI")}>
+                  {confirming ? <span className="spinner spinner--dark" /> : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12l5 5L19 7" /></svg>
+                      Payment completed
+                    </>
+                  )}
                 </button>
 
                 {expired && (
                   <div className="status-note status-note--danger">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 8v5M12 16h.01" />
-                    </svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
                     Window closed — message us on WhatsApp for a new link
                   </div>
                 )}
               </>
             )}
 
-            {/* ================= STEP 2: CONFIRM ================= */}
-            {step === 2 && (
+            {/* ================= STEP 2c: CRYPTO PAY ================= */}
+            {phase === "crypto" && (
               <>
-                <button className="back-link" onClick={() => setStep(1)} type="button">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M15 18l-6-6 6-6" />
-                  </svg>
-                  Back to payment
+                <button className="back-link" onClick={() => setPhase("method")} type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
+                  Change method
                 </button>
 
-                <div className="form-head">
-                  <div className="form-title">Confirm your payment</div>
-                  <div className="form-sub">
-                    Enter your transaction details and attach the payment screenshot. We'll verify it and activate your order.
+                <div className={`timer ${expired ? "timer--expired" : urgent ? "timer--urgent" : ""}`}>
+                  <div className="timer-top">
+                    <span className="timer-label">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
+                      {expired ? "Window expired" : "Payment window"}
+                    </span>
+                    {!expired && <span className="timer-value">{formatMMSS(secondsLeft)}</span>}
+                  </div>
+                  <div className="timer-track"><div className="timer-fill" style={{ width: `${expired ? 0 : progressPct}%` }} /></div>
+                </div>
+
+                <div className="chain-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 012.5-2h.5a2.5 2.5 0 010 5H12a2.5 2.5 0 000 5h.5a2.5 2.5 0 002.5-2M12 6v1.5M12 16.5V18" /></svg>
+                  {CRYPTO_CHAIN_LABEL}
+                  {displayAmountUSD !== null ? ` · $${displayAmountUSD}` : ""}
+                </div>
+
+                <div className="crypto-warning">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                  Only send <b>USDT on the BEP20 (BNB Smart Chain) network</b> to this address. Funds sent on any other network or token cannot be recovered.
+                </div>
+
+                <div className="wallet-box">
+                  <div className="wallet-label">Wallet address</div>
+                  <div className="wallet-address-row">
+                    <span className="wallet-address">{CRYPTO_WALLET_ADDRESS}</span>
+                    <button className="wallet-copy-btn" type="button" onClick={() => handleCopy(CRYPTO_WALLET_ADDRESS, setCopiedWallet)}>
+                      {copiedWallet ? "Copied" : "Copy"}
+                    </button>
                   </div>
                 </div>
 
-                <form onSubmit={handleSubmitProof}>
-                  {formError && (
-                    <div className="form-error">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 8v5M12 16h.01" />
-                      </svg>
-                      {formError}
-                    </div>
+                <button className="btn-secondary" disabled={expired || confirming} onClick={() => notifyOrder("Crypto (USDT BEP20)")} style={{ marginTop: 4 }}>
+                  {confirming ? <span className="spinner spinner--dark" /> : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12l5 5L19 7" /></svg>
+                      I've paid
+                    </>
                   )}
+                </button>
 
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="identifier">Email address or username</label>
-                    <input
-                      id="identifier"
-                      className="form-input"
-                      type="text"
-                      placeholder="you@example.com"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      autoComplete="email"
-                    />
+                {expired && (
+                  <div className="status-note status-note--danger">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                    Window closed — message us on WhatsApp to confirm your address
                   </div>
-
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="utr">UTR / transaction ID</label>
-                    <input
-                      id="utr"
-                      className="form-input form-input--mono"
-                      type="text"
-                      placeholder="e.g. 402913827461"
-                      value={utr}
-                      onChange={(e) => setUtr(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="screenshot">Payment screenshot</label>
-                    <input
-                      ref={fileInputRef}
-                      id="screenshot"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      onChange={handleFileChange}
-                      style={{ display: "none" }}
-                    />
-
-                    {!screenshot ? (
-                      <div className="file-field" onClick={() => fileInputRef.current?.click()} role="button" tabIndex={0}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ margin: "0 auto 6px" }}>
-                          <path d="M12 16V4M7 9l5-5 5 5" />
-                          <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-                        </svg>
-                        <div className="file-field-text">Tap to upload screenshot</div>
-                        <div className="file-field-hint">JPG, PNG, WEBP or GIF · up to 10MB</div>
-                      </div>
-                    ) : (
-                      <div className="file-preview">
-                        <img src={previewUrl} alt="Payment screenshot preview" />
-                        <div className="file-preview-name">{screenshot.name}</div>
-                        <button type="button" className="file-preview-remove" onClick={handleRemoveScreenshot}>
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <button className="pay-btn submit-btn" type="submit" disabled={submitting}>
-                    {submitting ? (
-                      <span className="spinner" />
-                    ) : (
-                      <>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <path d="M5 12l5 5L19 7" />
-                        </svg>
-                        Submit for verification
-                      </>
-                    )}
-                  </button>
-                </form>
+                )}
               </>
             )}
 
-            {/* ================= STEP 3: DONE ================= */}
-            {step === 3 && (
+            {/* ================= STEP 3: DELIVERY ================= */}
+            {phase === "delivery" && (
               <div className="success-wrap">
                 <div className="success-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M5 12l5 5L19 7" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L19 7" /></svg>
                 </div>
-                <div className="success-title">Payment submitted</div>
+                <div className="success-title">Payment recorded</div>
                 <div className="success-sub">
-                  We're verifying your transaction now. Orders are usually confirmed within <b>15–30 minutes</b>. Tap below to reach us on WhatsApp if you need anything in the meantime.
+                  Tap below to open WhatsApp and get your access — our team will verify your payment and deliver within <b>15–30 minutes</b>.
                 </div>
 
+                {confirmError && (
+                  <div className="form-error" style={{ maxWidth: 300, marginBottom: 18, textAlign: "left" }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                    {confirmError}
+                  </div>
+                )}
+
                 <div className="success-actions">
-                  <button className="wa-btn wa-btn--solid" onClick={openWhatsApp}>
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347" />
-                    </svg>
-                    Continue on WhatsApp
+                  <button
+                    className="wa-btn"
+                    onClick={() => openWhatsApp(`I've completed my payment via ${selectedMethod === "UPI" ? "UPI" : "USDT BEP20"} — please confirm and deliver access.`)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347" /></svg>
+                    Proceed to access
                   </button>
                 </div>
 
                 <div className="success-meta">
-                  <div className="success-meta-item">
-                    <div className="success-meta-key">Order Ref</div>
-                    <div className="success-meta-val">{orderRef}</div>
-                  </div>
-                  <div className="success-meta-item">
-                    <div className="success-meta-key">UTR</div>
-                    <div className="success-meta-val">{utr.trim()}</div>
-                  </div>
+                  <div className="success-meta-item"><div className="success-meta-key">Order ref</div><div className="success-meta-val">{orderRef}</div></div>
+                  <div className="success-meta-item"><div className="success-meta-key">Amount</div><div className="success-meta-val">{summaryAmountText || "—"}</div></div>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="trust-strip">
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="5" y="11" width="14" height="9" rx="1.5" />
-              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-            </svg>
-            Encrypted transfer
-          </div>
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-            </svg>
-            Verified merchant
-          </div>
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M8 12l3 3 5-6" />
-            </svg>
-            Instant delivery
-          </div>
+        <div className="trust-line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+          Encrypted transfer · Instant delivery
         </div>
-
-        <div className="footer">© ChartVault · All rights reserved</div>
+        <div className="footer">© {BRAND_NAME}</div>
       </div>
     </div>
   );

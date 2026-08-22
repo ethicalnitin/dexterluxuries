@@ -579,7 +579,7 @@ const reviews = [
     id: 1,
     name: "Arjun S.",
     location: "Mumbai",
-    review: "Dexter Luxuries delivers! TradingView Premium at this price is unbelievable. Activated in 5 minutes, works perfectly. Been using for 3 months straight.",
+    review: "MKR Tools & Softwares delivers! TradingView Premium at this price is unbelievable. Activated in 5 minutes, works perfectly. Been using for 3 months straight.",
   },
   {
     id: 2,
@@ -591,7 +591,7 @@ const reviews = [
     id: 3,
     name: "Chris D.",
     location: "Bangalore",
-    review: "Seamless from purchase to activation. Dexter Luxuries is my go-to for TradingView Premium. Way better than paying full price on the official site.",
+    review: "Seamless from purchase to activation. MKR Tools & Softwares is my go-to for TradingView Premium. Way better than paying full price on the official site.",
   },
   {
     id: 4,
@@ -765,7 +765,7 @@ const Proofs = () => {
               Ready to Trade Like a Pro?
             </h2>
             <p className="proofs-cta-sub">
-              Join 50,000+ traders already using TradingView Premium through Dexter Luxuries.
+              Join 50,000+ traders already using TradingView Premium through MKR Tools & Softwares.
             </p>
             <div className="proofs-cta-buttons">
               <a href="/products" className="btn-primary">

@@ -10,6 +10,8 @@ const fs = require('fs');
 const FormData = require('form-data');
 const fetch = require('node-fetch'); // npm install node-fetch@2
 const productRoutes = require("./routes/productRoutes");
+const authRoutes = require("./routes/authRoutes");
+const { requireAuth } = require("./middleware/auth");
 
 const app = express();
 const MONGO_URL = process.env.MONGO_URL;
@@ -29,6 +31,9 @@ if (!MONGO_URL) {
 }
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.warn("[Startup] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — Telegram notifications will be skipped.");
+}
+if (!process.env.JWT_SECRET) {
+  console.error("[Startup] JWT_SECRET is not set. Login will not work correctly until this is set in .env.");
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -117,11 +122,17 @@ app.get('/health', (req, res) => {
 // Product routes
 app.use("/api/products", productRoutes);
 
+// Auth routes — email + OTP, no passwords. See routes/authRoutes.js.
+app.use("/api/auth", authRoutes);
+
 // POST /api/orders/notify — order intent (contact details + chosen payment
 // method) sent from the payment modal on ProductPage.js, BEFORE the buyer
-// actually pays. This is what was missing: ProductPage already calls this
-// endpoint, but index.js never defined it, so nothing reached Telegram.
-app.post('/api/orders/notify', async (req, res) => {
+// actually pays.
+//
+// Now requires a valid session: the frontend must send
+//   Authorization: Bearer <token>
+// (the token returned by /api/auth/verify-otp) or this returns 401.
+app.post('/api/orders/notify', requireAuth, async (req, res) => {
   const { productId, productName, amount, email, phone, method } = req.body || {};
 
   // ── Validation ──────────────────────────────────────────────────────────
@@ -141,6 +152,7 @@ app.post('/api/orders/notify', async (req, res) => {
     const captionLines = [
       `🛒 <b>New Order Started</b>`,
       ``,
+      `🔐 <b>Signed in as:</b> ${escapeHtml(req.user.email)}`,
       productId ? `🆔 <b>Product ID:</b> <code>${escapeHtml(String(productId).trim())}</code>` : null,
       productName ? `📦 <b>Product:</b> ${escapeHtml(String(productName).trim())}` : null,
       `💵 <b>Amount:</b> ₹${Number(amount).toLocaleString()}`,
@@ -167,7 +179,9 @@ app.post('/api/orders/notify', async (req, res) => {
 // POST /api/deposit — receive UTR + email/username + screenshot, forward to Telegram
 // (this is the LATER step — after the buyer has actually paid — used by the
 // bank-transfer payment page.)
-app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
+//
+// Also requires a valid session now, for the same reason as /api/orders/notify.
+app.post('/api/deposit', requireAuth, upload.single('screenshot'), async (req, res) => {
   const { utr, email, amount, method, productName, orderRef } = req.body;
   const screenshotFile = req.file;
 
@@ -191,6 +205,7 @@ app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
     const captionLines = [
       `💰 <b>New Deposit Submission</b>`,
       ``,
+      `🔐 <b>Signed in as:</b> ${escapeHtml(req.user.email)}`,
       orderRef ? `🎫 <b>Order Ref:</b> <code>${escapeHtml(orderRef.trim())}</code>` : null,
       productName ? `📦 <b>Product:</b> ${escapeHtml(productName.trim())}` : null,
       `👤 <b>Email/Username:</b> ${escapeHtml(email.trim())}`,

@@ -1,1471 +1,422 @@
-import { useParams } from "react-router-dom";
 import React, { useState, useEffect, useRef } from "react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Countdown from "react-countdown";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 
 // ── Price formatting helper ───────────────────────────────────────────────────
-// Prices come from the backend in INR. We display the real value — no fake
+// Prices come from the backend in USD. We display the real value — no fake
 // pricing, no currency conversion.
-function formatINR(amount) {
+function formatUSD(amount) {
   if (amount === null || amount === undefined || amount === "") return null;
   const n = Number(amount);
   if (Number.isNaN(n)) return null;
-  return `₹${n.toLocaleString("en-IN")}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Turns a plan's `durationInMonths` into the label shown on its card.
+// null / 0 / undefined means "lifetime" per the model's own comment.
+function formatPlanDuration(plan) {
+  if (plan.name) return plan.name;
+  if (!plan.durationInMonths) return "Lifetime";
+  return plan.durationInMonths === 1 ? "1 Month" : `${plan.durationInMonths} Months`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── UPI payment config ────────────────────────────────────────────────────────
-// TODO: replace with your real UPI ID (VPA) and payee/merchant display name
-// before going live. This is what actually receives the money.
-const UPI_VPA = "paytm.s2znhpg@pty";
-const UPI_PAYEE_NAME = "ChartVault";
-
-// Backend endpoint that receives the order details (email/username + phone +
-// amount) and relays them to your Telegram bot server-side. This MUST happen
-// on the backend — never call the Telegram Bot API directly from the browser,
-// since that would expose your bot token to anyone who opens devtools.
-// Expected contract: POST { productId, productName, amount, email, phone, method }
-// -> the backend forwards a formatted message to your Telegram chat via the
-// Bot API (https://api.telegram.org/bot<token>/sendMessage).
-function getNotifyEndpoint() {
-  const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
-  return `${apiBase}/orders/notify`;
-}
-
-// ── App-specific UPI deep links ───────────────────────────────────────────────
-// A plain `upi://pay?...` link hands the choice of which app opens to the
-// phone's OS, which will happily launch whatever it thinks is the "default"
-// UPI handler (WhatsApp Pay, in your case) instead of asking. To let the
-// buyer pick a specific app, we use each app's own custom URI scheme —
-// Google Pay, PhonePe, and Paytm all accept the same standard UPI query
-// params, they just listen on a different scheme. "Other UPI Apps" falls
-// back to the generic upi://pay link, which triggers the normal Android
-// chooser sheet.
-const UPI_APP_SCHEMES = {
-  gpay: "tez://upi/pay",
-  phonepe: "phonepe://pay",
-  paytm: "paytmmp://pay",
-  upi: "upi://pay",
-};
-
-function buildAppUpiDeepLink(appId, { amount, note }) {
-  const params = new URLSearchParams({
-    pa: UPI_VPA,                 // payee address (your UPI ID)
-    pn: UPI_PAYEE_NAME,          // payee name
-    am: String(amount),          // amount
-    cu: "INR",
-    tn: note || "Order payment", // transaction note
-  });
-  const scheme = UPI_APP_SCHEMES[appId] || UPI_APP_SCHEMES.upi;
-  return `${scheme}?${params.toString()}`;
-}
-
-// The UPI app picker shown in the payment modal. Icons are the official
-// brand marks (via the simple-icons CDN, rendered in each brand's real
-// color) rather than emoji, so the picker reads as a real payment method
-// selector rather than a placeholder. If an icon fails to load (offline,
-// CDN hiccup) the button falls back to a colored initial so it never shows
-// a broken-image glyph.
-const upiApps = [
-  { id: "gpay", name: "Google Pay", icon: "https://cdn.simpleicons.org/googlepay/4285F4", accent: "#4285F4" },
-  { id: "phonepe", name: "PhonePe", icon: "https://cdn.simpleicons.org/phonepe/5F259F", accent: "#5F259F" },
-  { id: "paytm", name: "Paytm", icon: "https://cdn.simpleicons.org/paytm/00BAF2", accent: "#00BAF2" },
-  { id: "upi", name: "Other UPI Apps", icon: "https://cdn.simpleicons.org/upi/097939", accent: "#097939" },
-];
-// ─────────────────────────────────────────────────────────────────────────────
-
-// WhatsApp number that both the "Pay with Bank Transfer" button and the
-// post-UPI-payment "Proceed to WhatsApp" button send buyers to.
-const WHATSAPP_NUMBER = "919289847981";
-
-// Builds a wa.me deep link with a pre-filled message describing the order.
-// `context` controls the wording: "bank" for a fresh bank-transfer request,
-// "upi-confirm" for a buyer confirming a UPI payment they already made.
-function buildWhatsAppLink({ amount, productName, context }) {
-  const price = formatINR(amount) || `₹${amount}`;
-  const text =
-    context === "upi-confirm"
-      ? `Hi, I've completed the UPI payment for ${productName} (${price}). Please confirm my order.`
-      : `Hi, I'd like to pay via bank transfer for ${productName} (${price}). Please share the bank details.`;
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
-}
-
-function isValidEmailOrUsername(value) {
-  // Accept either an email address or a plain TradingView username (no spaces).
-  const v = (value || "").trim();
-  if (!v) return false;
-  const looksLikeEmail = /\S+@\S+\.\S+/.test(v);
-  const looksLikeUsername = /^\S{3,}$/.test(v);
-  return looksLikeEmail || looksLikeUsername;
-}
-
-function isValidIndianPhone(value) {
-  const digits = (value || "").replace(/\D/g, "");
-  return digits.length === 10 || (digits.length === 12 && digits.startsWith("91"));
-}
-// ─────────────────────────────────────────────────────────────────────────────
+/* ============================================================
+   DESIGN SYSTEM — shared with the homepage
+   Same tokens (ink / glass / aurora gradient), same Bricolage
+   Grotesque + Inter + JetBrains Mono pairing. Motion is
+   restrained on purpose: the aurora accent is reserved for the
+   primary action and a few structural badges, not looping on
+   every element — that read as a hard-sell dropship template
+   rather than a store people trust with a card number.
+============================================================ */
 
 const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
   :root {
-    --violet: #8B5CF6;
-    --violet-light: #C4B5FD;
-    --cyan: #22D3EE;
-    --dark: #05050A;
-    --dark2: #0A0A13;
-    --dark3: #111119;
-    --dark4: #181822;
-    --white: #F4F2FF;
-    --white-dim: rgba(244,242,255,0.62);
-    --white-faint: rgba(244,242,255,0.08);
-    --border: rgba(255,255,255,0.09);
-    --surface: rgba(255,255,255,0.045);
-    --grad: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 100%);
+    --cv-ink: #07070F;
+    --cv-ink-2: #0B0B18;
+    --cv-ink-3: #111119;
+    --cv-ink-4: #181822;
+    --cv-glass: rgba(255,255,255,0.045);
+    --cv-glass-hi: rgba(255,255,255,0.08);
+    --cv-border: rgba(255,255,255,0.10);
+    --cv-border-strong: rgba(255,255,255,0.22);
+    --cv-text: #F6F7FB;
+    --cv-muted: #A6ACC0;
+    --cv-faint: #686E82;
+    --cv-violet: #8B5CF6;
+    --cv-pink: #FF63B0;
+    --cv-cyan: #37E6C9;
+    --cv-aurora: linear-gradient(92deg, var(--cv-violet) 0%, var(--cv-pink) 48%, var(--cv-cyan) 100%);
   }
 
+  * { box-sizing: border-box; }
+
   .pp-root {
-    background: var(--dark);
-    color: var(--white);
+    position: relative;
+    background: var(--cv-ink);
+    color: var(--cv-text);
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
     padding-top: 88px;
+    overflow-x: clip;
+    isolation: isolate;
+  }
+
+  .pp-root ::selection { background: rgba(139,92,246,.35); color: #fff; }
+
+  /* ---------- Ambient background — quiet, non-looping ---------- */
+  .pp-aurora-field { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .pp-aurora-blob { position: absolute; border-radius: 50%; filter: blur(100px); opacity: .22; }
+  .pp-aurora-blob.b1 { width: 520px; height: 520px; left: -160px; top: -180px; background: radial-gradient(circle, var(--cv-violet), transparent 70%); }
+  .pp-aurora-blob.b2 { width: 460px; height: 460px; right: -140px; top: 300px; background: radial-gradient(circle, var(--cv-cyan), transparent 70%); opacity: .14; }
+
+  .pp-grain {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .03; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
   .pp-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    gap: 20px;
-    background: var(--dark);
-    color: var(--white-dim);
-    font-size: 15px;
-    font-weight: 300;
-    font-family: 'Inter', sans-serif;
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 80vh; gap: 20px;
+    color: var(--cv-muted); font-size: 14px; font-weight: 400;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: .3px;
   }
-
   .pp-loading-dots { display: flex; gap: 8px; }
-
-  .pp-loading-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--violet);
-    animation: dotBounce 1.2s infinite;
-  }
-
-  .pp-loading-dot:nth-child(2) { animation-delay: 0.2s; }
-  .pp-loading-dot:nth-child(3) { animation-delay: 0.4s; }
-
-  @keyframes dotBounce {
-    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-    40% { transform: translateY(-8px); opacity: 1; }
-  }
+  .pp-loading-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cv-violet); animation: dotBounce 1.2s infinite; }
+  .pp-loading-dot:nth-child(2) { animation-delay: .15s; background: var(--cv-pink); }
+  .pp-loading-dot:nth-child(3) { animation-delay: .3s; background: var(--cv-cyan); }
+  @keyframes dotBounce { 0%,80%,100% { transform: translateY(0); opacity: .35; } 40% { transform: translateY(-7px); opacity: 1; } }
 
   .pp-error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    gap: 16px;
-    background: var(--dark);
-    font-family: 'Inter', sans-serif;
-    text-align: center;
-    padding: 24px;
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 80vh; gap: 16px; text-align: center; padding: 24px;
   }
+  .pp-error-icon { font-size: 36px; color: var(--cv-faint); }
+  .pp-error p { font-size: 15px; color: var(--cv-muted); font-weight: 400; max-width: 400px; }
 
-  .pp-error-icon { font-size: 48px; }
-
-  .pp-error p {
-    font-size: 16px;
-    color: var(--white-dim);
-    font-weight: 300;
-    max-width: 400px;
-  }
-
-  .pp-grid {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 48px 32px 80px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 64px;
-    align-items: start;
+  .pp-shell-grid {
+    position: relative; z-index: 2;
+    max-width: 1180px; margin: 0 auto; padding: 48px 32px 80px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start;
   }
 
   .pp-image-col { position: sticky; top: 100px; }
 
   .pp-image-wrap {
-    position: relative;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-    background: var(--dark2);
+    position: relative; border: 1px solid var(--cv-border); border-radius: 16px;
+    overflow: hidden; background: var(--cv-ink-2);
   }
-
-  .pp-product-img {
-    width: 100%;
-    aspect-ratio: 4/3;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.5s ease;
-  }
-
-  .pp-image-wrap:hover .pp-product-img { transform: scale(1.03); }
+  .pp-product-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
 
   .pp-discount-badge {
-    position: absolute;
-    top: 16px; left: 16px;
-    background: var(--grad);
-    color: #0A0A13;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 5px 12px;
-    border-radius: 6px;
-    z-index: 2;
+    position: absolute; top: 14px; left: 14px;
+    background: var(--cv-ink); border: 1px solid var(--cv-border-strong);
+    color: var(--cv-text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 12px; border-radius: 7px; z-index: 2;
   }
+  .pp-discount-badge strong { color: var(--cv-cyan); font-weight: 700; }
 
-  .pp-trust-row {
-    display: flex;
-    gap: 0;
-    margin-top: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
+  .pp-trust-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
   .pp-trust-pill {
-    flex: 1;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--white-dim);
-    padding: 12px 6px;
-    border-right: 1px solid var(--border);
-    letter-spacing: 0.3px;
+    display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 12px;
+    padding: 14px 6px; font-size: 10.5px; font-weight: 500; color: var(--cv-muted); letter-spacing: .1px;
   }
-
-  .pp-trust-pill:last-child { border-right: none; }
+  .pp-trust-icon {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    background: rgba(255,255,255,.05); border: 1px solid var(--cv-border);
+    color: var(--cv-cyan); display: flex; align-items: center; justify-content: center;
+  }
+  .pp-trust-icon svg { width: 13px; height: 13px; }
 
   .pp-detail-col { display: flex; flex-direction: column; gap: 0; }
 
   .pp-eyebrow {
-    font-size: 10px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--violet-light);
-    font-weight: 600;
-    margin-bottom: 12px;
-    display: block;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--cv-faint); font-weight: 600; margin-bottom: 14px;
   }
+  .pp-eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cv-aurora); flex-shrink: 0; }
 
   .pp-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    line-height: 1.15;
-    margin-bottom: 28px;
-    color: var(--white);
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: clamp(1.9rem, 3.6vw, 2.6rem);
+    font-weight: 700; letter-spacing: -1.2px; line-height: 1.1;
+    margin-bottom: 26px; color: var(--cv-text);
   }
 
   .pp-countdown-card {
-    background: linear-gradient(150deg, rgba(139,92,246,0.10), rgba(34,211,238,0.05) 60%, rgba(139,92,246,0.06));
-    border: 1px solid rgba(139,92,246,0.28);
-    border-radius: 16px;
-    padding: 20px 24px;
-    margin-bottom: 28px;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 10px 36px rgba(139,92,246,0.14), inset 0 1px 0 rgba(255,255,255,0.05);
+    position: relative; overflow: hidden;
+    background: var(--cv-glass);
+    border: 1px solid var(--cv-border);
+    border-radius: 14px; padding: 18px 22px; margin-bottom: 26px;
   }
-
   .pp-countdown-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: var(--grad);
-    background-size: 200% 100%;
-    box-shadow: 0 0 14px rgba(139,92,246,0.55);
-    animation: countdownShimmer 3.5s linear infinite;
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--cv-aurora);
   }
-
-  .pp-countdown-card::after {
-    content: '';
-    position: absolute;
-    top: -40%; right: -10%;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(34,211,238,0.16), transparent 70%);
-    pointer-events: none;
-  }
-
-  @keyframes countdownShimmer {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 200% 50%; }
-  }
-
   .pp-countdown-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--white-dim);
-    font-weight: 600;
-    margin-bottom: 14px;
-    position: relative;
-    z-index: 1;
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--cv-muted); font-weight: 600; margin-bottom: 14px;
   }
+  .pp-live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cv-pink); flex-shrink: 0; animation: liveDotFade 2.4s ease-in-out infinite; }
+  @keyframes liveDotFade { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
-  .pp-live-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #FF5C5C;
-    box-shadow: 0 0 0 rgba(255,92,92,0.6);
-    flex-shrink: 0;
-    animation: liveDotPulse 1.6s ease-out infinite;
-  }
-
-  @keyframes liveDotPulse {
-    0% { box-shadow: 0 0 0 0 rgba(255,92,92,0.55); }
-    70% { box-shadow: 0 0 0 7px rgba(255,92,92,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,92,92,0); }
-  }
-
-  .pp-countdown-display { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
-
+  .pp-countdown-display { display: flex; align-items: center; gap: 8px; }
   .pp-time-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: linear-gradient(165deg, var(--dark4), var(--dark3));
-    border: 1px solid rgba(139,92,246,0.25);
-    border-radius: 11px;
-    padding: 10px 16px;
-    min-width: 64px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--cv-ink-3);
+    border: 1px solid var(--cv-border); border-radius: 10px; padding: 9px 15px; min-width: 58px;
   }
+  .pp-time-num { font-family: 'JetBrains Mono', monospace; font-size: 1.55rem; font-weight: 700; color: var(--cv-text); line-height: 1; font-variant-numeric: tabular-nums; }
+  .pp-time-label { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--cv-faint); margin-top: 5px; font-weight: 500; }
+  .pp-colon { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; color: var(--cv-faint); font-weight: 700; margin-bottom: 12px; }
+  .pp-expired { font-size: 14px; color: var(--cv-pink); font-weight: 500; }
 
-  .pp-time-num {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--violet-light);
-    line-height: 1;
-    text-shadow: 0 0 18px rgba(196,181,253,0.45);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .pp-time-label {
-    font-size: 9px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--white-dim);
-    margin-top: 5px;
-    font-weight: 500;
-  }
-
-  .pp-colon {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.6rem;
-    color: var(--violet-light);
-    font-weight: 700;
-    margin-bottom: 14px;
-    animation: colonBlink 1s steps(1) infinite;
-  }
-
-  @keyframes colonBlink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0.35; }
-  }
-
-  .pp-expired { font-size: 14px; color: rgba(255,80,80,0.8); font-weight: 400; }
-
-  .pp-pricing {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 28px;
-    flex-wrap: wrap;
-  }
-
-  .pp-price-current {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 2.4rem;
-    font-weight: 700;
-    color: var(--white);
-    line-height: 1;
-  }
-
-  .pp-price-strike {
-    font-size: 1.1rem;
-    color: var(--white-dim);
-    text-decoration: line-through;
-    font-weight: 300;
-  }
-
+  .pp-pricing { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; flex-wrap: wrap; }
+  .pp-price-current { font-family: 'JetBrains Mono', monospace; font-size: 2.1rem; font-weight: 600; color: var(--cv-text); line-height: 1; }
+  .pp-price-strike { font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--cv-faint); text-decoration: line-through; font-weight: 400; }
   .pp-price-save {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #0A0A13;
-    background: var(--grad);
-    padding: 4px 10px;
-    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--cv-cyan); background: rgba(55,230,201,.1); border: 1px solid rgba(55,230,201,.25); padding: 4px 10px; border-radius: 6px;
   }
 
-  /* ---------- Plan selector (multi-duration products) ---------- */
-  .pp-plans {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
-  }
-
-  .pp-plan-label {
-    font-size: 11px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--white-dim);
-    font-weight: 500;
-    margin-bottom: 4px;
-  }
-
+  /* ---------- Plan selector ---------- */
+  .pp-plans { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  .pp-plan-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--cv-faint); font-weight: 600; margin-bottom: 4px; }
   .pp-plan-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 18px;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s, transform 0.15s;
-    text-align: left;
-    width: 100%;
-    color: var(--white);
-    font-family: 'Inter', sans-serif;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 12px;
+    padding: 15px 18px; cursor: pointer; transition: border-color .15s ease, background .15s ease;
+    text-align: left; width: 100%; color: var(--cv-text); font-family: 'Inter', sans-serif;
   }
-
-  .pp-plan-card:hover { transform: translateY(-1px); border-color: rgba(139,92,246,0.35); }
-
-  .pp-plan-card--active {
-    border-color: var(--violet);
-    background: rgba(139,92,246,0.08);
-    box-shadow: 0 0 0 1px rgba(139,92,246,0.25);
-  }
-
-  .pp-plan-card--disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .pp-plan-radio {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 1.5px solid var(--border);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: border-color 0.2s;
-  }
-
-  .pp-plan-card--active .pp-plan-radio { border-color: var(--violet); }
-
-  .pp-plan-radio-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--grad);
-    transform: scale(0);
-    transition: transform 0.15s;
-  }
-
+  .pp-plan-card:hover { border-color: var(--cv-border-strong); background: var(--cv-glass-hi); }
+  .pp-plan-card--active { border-color: var(--cv-violet); background: rgba(139,92,246,.07); }
+  .pp-plan-radio { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--cv-border-strong); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
+  .pp-plan-card--active .pp-plan-radio { border-color: var(--cv-violet); }
+  .pp-plan-radio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cv-violet); transform: scale(0); transition: transform .15s; }
   .pp-plan-card--active .pp-plan-radio-dot { transform: scale(1); }
-
-  .pp-plan-main {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .pp-plan-duration {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14.5px;
-    font-weight: 600;
-  }
-
+  .pp-plan-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+  .pp-plan-duration { font-family: 'Bricolage Grotesque', sans-serif; font-size: 14.5px; font-weight: 600; }
   .pp-plan-badge {
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: #0A0A13;
-    background: var(--grad);
-    padding: 3px 8px;
-    border-radius: 5px;
-    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+    color: var(--cv-ink); background: var(--cv-aurora); padding: 3px 8px; border-radius: 5px; flex-shrink: 0;
   }
-
-  .pp-plan-price-col {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-    flex-shrink: 0;
-  }
-
-  .pp-plan-price {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14.5px;
-    font-weight: 700;
-    color: var(--violet-light);
-  }
-
-  .pp-plan-price-strike {
-    font-size: 11.5px;
-    color: var(--white-dim);
-    text-decoration: line-through;
-    font-weight: 300;
-  }
-
-  .pp-plan-price--loading {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--white-dim);
-  }
+  .pp-plan-price-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+  .pp-plan-price { font-family: 'JetBrains Mono', monospace; font-size: 14.5px; font-weight: 600; color: var(--cv-text); }
+  .pp-plan-price-strike { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cv-faint); text-decoration: line-through; font-weight: 400; }
 
   .pp-buy-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    background: var(--grad);
-    color: #0A0A13;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    padding: 18px 32px;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    font-family: 'Inter', sans-serif;
-    box-shadow: 0 0 40px rgba(139,92,246,0.2);
-    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+    background: var(--cv-aurora); background-size: 160% auto; background-position: 0% center;
+    color: var(--cv-ink); font-size: 15px; font-weight: 700; letter-spacing: .1px;
+    padding: 17px 32px; border: none; border-radius: 12px; cursor: pointer;
+    transition: transform .2s ease, box-shadow .2s ease, background-position .35s ease;
+    font-family: 'Inter', sans-serif; box-shadow: 0 10px 26px rgba(139,92,246,.22); margin-bottom: 10px;
   }
-
-  .pp-buy-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 48px rgba(139,92,246,0.4);
-  }
-
+  .pp-buy-btn:hover { transform: translateY(-1px); background-position: 100% center; box-shadow: 0 14px 32px rgba(139,92,246,.3); }
   .pp-buy-btn:active { transform: translateY(0); }
+  .pp-buy-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+  .pp-btn-arrow { font-size: 16px; transition: transform .2s; }
+  .pp-buy-btn:hover .pp-btn-arrow { transform: translateX(3px); }
 
-  .pp-buy-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+  .pp-proofs-link-row { display: flex; justify-content: center; margin-bottom: 22px; }
+  .pp-proofs-link {
+    display: inline-flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer;
+    color: var(--cv-cyan); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+    padding: 4px 2px; border-bottom: 1px solid transparent; transition: border-color .15s ease;
   }
+  .pp-proofs-link:hover { border-bottom-color: var(--cv-cyan); }
 
-  .pp-btn-arrow { font-size: 18px; transition: transform 0.2s; }
-  .pp-buy-btn:hover .pp-btn-arrow { transform: translateX(4px); }
+  .pp-cta-note { font-size: 12px; color: var(--cv-faint); text-align: center; font-weight: 400; margin-bottom: 34px; line-height: 1.6; }
 
-  .pp-cta-note {
-    font-size: 12px;
-    color: var(--white-dim);
-    text-align: center;
-    font-weight: 300;
-    margin-bottom: 36px;
-    line-height: 1.6;
+  .pp-description { border-top: 1px solid var(--cv-border); padding-top: 32px; }
+  .pp-desc-heading { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 700; letter-spacing: -.2px; margin-bottom: 16px; color: var(--cv-text); }
+
+  .pp-desc-body { font-size: 14.5px; color: var(--cv-muted); line-height: 1.85; font-weight: 400; }
+  .pp-desc-body * { color: inherit !important; background: transparent !important; font-family: 'Inter', sans-serif !important; max-width: 100%; }
+  .pp-desc-body h1, .pp-desc-body h2, .pp-desc-body h3, .pp-desc-body h4, .pp-desc-body h5, .pp-desc-body h6 {
+    font-family: 'Bricolage Grotesque', sans-serif !important; font-weight: 700 !important; font-size: 1.02rem !important;
+    color: var(--cv-text) !important; margin: 22px 0 12px !important; line-height: 1.4 !important;
   }
-
-  .pp-description {
-    border-top: 1px solid var(--border);
-    padding-top: 32px;
-  }
-
-  .pp-desc-heading {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 16px;
-    color: var(--white);
-  }
-
-  /*
-    .pp-desc-body renders arbitrary HTML that comes from the backend for each
-    product. To keep the page looking consistent no matter what markup a
-    given product's description uses, every element inside is force-
-    normalized to the store's own type system below.
-  */
-  .pp-desc-body {
-    font-size: 14.5px;
-    color: var(--white-dim);
-    line-height: 1.85;
-    font-weight: 300;
-  }
-
-  .pp-desc-body * {
-    color: inherit !important;
-    background: transparent !important;
-    font-family: 'Inter', sans-serif !important;
-    max-width: 100%;
-  }
-
-  .pp-desc-body h1, .pp-desc-body h2, .pp-desc-body h3,
-  .pp-desc-body h4, .pp-desc-body h5, .pp-desc-body h6 {
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 1.05rem !important;
-    color: var(--white) !important;
-    margin: 22px 0 12px !important;
-    line-height: 1.4 !important;
-  }
-
-  .pp-desc-body h1:first-child, .pp-desc-body h2:first-child,
-  .pp-desc-body h3:first-child, .pp-desc-body h4:first-child { margin-top: 0 !important; }
-
-  .pp-desc-body p { margin: 0 0 14px !important; font-size: 14.5px !important; font-weight: 300 !important; }
+  .pp-desc-body h1:first-child, .pp-desc-body h2:first-child, .pp-desc-body h3:first-child, .pp-desc-body h4:first-child { margin-top: 0 !important; }
+  .pp-desc-body p { margin: 0 0 14px !important; font-size: 14.5px !important; font-weight: 400 !important; }
   .pp-desc-body p:last-child { margin-bottom: 0 !important; }
-
   .pp-desc-body ul, .pp-desc-body ol { padding-left: 0 !important; list-style: none !important; margin: 0 0 16px !important; }
-
-  .pp-desc-body li {
-    padding: 7px 0 !important;
-    border-bottom: 1px solid var(--white-faint) !important;
-    display: flex !important;
-    gap: 10px !important;
-    font-size: 14.5px !important;
-    font-weight: 300 !important;
-  }
-
-  .pp-desc-body li::before {
-    content: '✦' !important;
-    color: var(--violet-light) !important;
-    font-size: 10px !important;
-    flex-shrink: 0 !important;
-    margin-top: 4px !important;
-  }
-
+  .pp-desc-body li { padding: 7px 0 !important; border-bottom: 1px solid var(--cv-border) !important; display: flex !important; gap: 10px !important; font-size: 14.5px !important; font-weight: 400 !important; }
+  .pp-desc-body li::before { content: '—' !important; color: var(--cv-faint) !important; flex-shrink: 0 !important; }
   .pp-desc-body li:last-child { border-bottom: none !important; }
-  .pp-desc-body strong, .pp-desc-body b { color: var(--white) !important; font-weight: 500 !important; }
+  .pp-desc-body strong, .pp-desc-body b { color: var(--cv-text) !important; font-weight: 600 !important; }
   .pp-desc-body em, .pp-desc-body i { font-style: italic !important; }
-  .pp-desc-body a { color: var(--violet-light) !important; text-decoration: underline !important; }
-  .pp-desc-body img { max-width: 100% !important; height: auto !important; border: 1px solid var(--border) !important; border-radius: 10px !important; margin: 12px 0 !important; display: block !important; }
+  .pp-desc-body a { color: var(--cv-cyan) !important; text-decoration: underline !important; }
+  .pp-desc-body img { max-width: 100% !important; height: auto !important; border: 1px solid var(--cv-border) !important; border-radius: 10px !important; margin: 12px 0 !important; display: block !important; }
   .pp-desc-body table { width: 100% !important; border-collapse: collapse !important; margin: 12px 0 20px !important; font-size: 13.5px !important; }
-  .pp-desc-body th, .pp-desc-body td { border: 1px solid var(--border) !important; padding: 8px 10px !important; text-align: left !important; }
-  .pp-desc-body th { color: var(--violet-light) !important; font-weight: 500 !important; text-transform: uppercase !important; font-size: 11px !important; letter-spacing: 0.5px !important; }
-  .pp-desc-body blockquote { border-left: 2px solid var(--violet) !important; padding: 4px 0 4px 16px !important; margin: 16px 0 !important; font-style: italic !important; color: var(--white-dim) !important; }
-  .pp-desc-body code { font-family: monospace !important; background: var(--dark3) !important; padding: 2px 6px !important; border-radius: 4px !important; font-size: 13px !important; color: var(--violet-light) !important; }
-  .pp-desc-body hr { border: none !important; border-top: 1px solid var(--border) !important; margin: 20px 0 !important; }
+  .pp-desc-body th, .pp-desc-body td { border: 1px solid var(--cv-border) !important; padding: 8px 10px !important; text-align: left !important; }
+  .pp-desc-body th { color: var(--cv-cyan) !important; font-weight: 600 !important; text-transform: uppercase !important; font-size: 11px !important; letter-spacing: .5px !important; font-family: 'JetBrains Mono', monospace !important; }
+  .pp-desc-body blockquote { border-left: 2px solid var(--cv-violet) !important; padding: 4px 0 4px 16px !important; margin: 16px 0 !important; font-style: italic !important; color: var(--cv-muted) !important; }
+  .pp-desc-body code { font-family: 'JetBrains Mono', monospace !important; background: var(--cv-ink-3) !important; padding: 2px 6px !important; border-radius: 4px !important; font-size: 13px !important; color: var(--cv-cyan) !important; }
+  .pp-desc-body hr { border: none !important; border-top: 1px solid var(--cv-border) !important; margin: 20px 0 !important; }
 
-  .pp-desc-empty { font-size: 14px; color: var(--white-dim); font-weight: 300; font-style: italic; }
-  .pp-inline-error { font-size: 13px; color: rgba(255,100,100,0.8); font-weight: 300; margin-top: 12px; }
-
-/* ---------- "Show me proofs first" inline CTA (below plan selector) ----------
-   Deliberately loud: shimmering gradient background, a soft pulsing glow,
-   and a bouncing magnifier icon so it visually competes with — but doesn't
-   outrank — the primary Buy Now button right below it. */
-.pp-proofs-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-
-  width: 100%;
-  padding: 17px 22px;
-  margin-top: 4px;
-  margin-bottom: 16px;
-
-  background: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 50%, #8B5CF6 100%);
-  background-size: 220% 100%;
-
-  border: none;
-  border-radius: 14px;
-
-  color: #0A0A13;
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-
-  cursor: pointer;
-  user-select: none;
-
-  animation:
-    proofsCtaShimmer 3.2s linear infinite,
-    proofsCtaPulse 2.4s ease-in-out infinite;
-
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-}
-
-@keyframes proofsCtaShimmer {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 220% 50%; }
-}
-
-@keyframes proofsCtaPulse {
-  0%, 100% {
-    box-shadow:
-      0 0 0 0 rgba(139, 92, 246, 0.45),
-      0 10px 28px rgba(139, 92, 246, 0.22);
-  }
-  50% {
-    box-shadow:
-      0 0 0 9px rgba(139, 92, 246, 0),
-      0 16px 40px rgba(139, 92, 246, 0.38);
-  }
-}
-
-.pp-proofs-cta:hover {
-  transform: translateY(-3px) scale(1.012);
-  box-shadow:
-    0 0 0 0 rgba(139, 92, 246, 0.5),
-    0 18px 46px rgba(139, 92, 246, 0.4);
-}
-
-.pp-proofs-cta:active {
-  transform: translateY(-1px) scale(0.98);
-}
-
-.pp-proofs-cta-icon {
-  font-size: 18px;
-  line-height: 1;
-  animation: proofsCtaIconBounce 1.5s ease-in-out infinite;
-}
-
-@keyframes proofsCtaIconBounce {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-3px) rotate(-10deg); }
-}
-
-.pp-proofs-cta-arrow {
-  font-size: 16px;
-  line-height: 1;
-  transition: transform 0.22s ease;
-}
-
-.pp-proofs-cta:hover .pp-proofs-cta-arrow { transform: translateX(4px); }
+  .pp-desc-empty { font-size: 14px; color: var(--cv-faint); font-weight: 400; font-style: italic; }
+  .pp-inline-error { font-size: 13px; color: var(--cv-pink); font-weight: 400; margin-top: 12px; }
 
   /* ---------- Shared section header ---------- */
-  .pp-section {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 72px 32px;
-    border-top: 1px solid var(--border);
-  }
+  .pp-section { position: relative; z-index: 2; max-width: 1180px; margin: 0 auto; padding: 68px 32px; border-top: 1px solid var(--cv-border); }
   .pp-section-eyebrow {
-    font-size: 11px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--violet-light);
-    font-weight: 600;
-    text-align: center;
-    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--cv-faint); font-weight: 700; text-align: center; margin-bottom: 12px;
   }
+  .pp-section-eyebrow::before, .pp-section-eyebrow::after { content: ''; width: 14px; height: 1px; background: var(--cv-border-strong); }
   .pp-section-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(1.7rem, 3.2vw, 2.3rem);
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    text-align: center;
-    margin-bottom: 12px;
-    color: var(--white);
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(1.65rem, 3vw, 2.2rem);
+    font-weight: 700; letter-spacing: -.8px; text-align: center; margin-bottom: 12px; color: var(--cv-text);
   }
-  .pp-section-sub {
-    font-size: 14.5px;
-    color: var(--white-dim);
-    font-weight: 300;
-    text-align: center;
-    max-width: 520px;
-    margin: 0 auto 48px;
-  }
+  .pp-section-sub { font-size: 14.5px; color: var(--cv-muted); font-weight: 400; text-align: center; max-width: 520px; margin: 0 auto 44px; }
 
   /* ---------- Purchase process ---------- */
-  .pp-steps {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    position: relative;
-  }
+  .pp-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   .pp-step {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 26px 22px;
-    position: relative;
-    transition: transform 0.2s, border-color 0.2s;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 14px; padding: 24px 20px;
+    transition: border-color .2s ease, background .2s ease;
   }
-  .pp-step:hover { transform: translateY(-3px); border-color: rgba(139,92,246,0.35); }
+  .pp-step:hover { border-color: var(--cv-border-strong); background: var(--cv-glass-hi); }
   .pp-step-num {
-    width: 34px; height: 34px;
-    border-radius: 10px;
-    background: var(--grad);
-    color: #0A0A13;
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 700;
-    font-size: 14px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 16px;
+    width: 30px; height: 30px; border-radius: 8px; background: var(--cv-ink-3); border: 1px solid var(--cv-border-strong); color: var(--cv-text);
+    font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 15px;
   }
-  .pp-step-title { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 8px; color: var(--white); }
-  .pp-step-desc { font-size: 13px; color: var(--white-dim); line-height: 1.6; font-weight: 300; }
+  .pp-step-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--cv-text); }
+  .pp-step-desc { font-size: 13px; color: var(--cv-muted); line-height: 1.6; font-weight: 400; }
 
   /* ---------- Proofs gallery ---------- */
-  .pp-proofs-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }
+  .pp-proofs-header-row { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 8px; }
   .pp-proofs-toggle-btn {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--violet-light);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.4px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    white-space: nowrap;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); color: var(--cv-text);
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+    padding: 9px 18px; border-radius: 9px; cursor: pointer; transition: background .15s, border-color .15s;
   }
-  .pp-proofs-toggle-btn:hover { background: rgba(139,92,246,0.12); border-color: rgba(139,92,246,0.35); }
-  .pp-proofs-hidden-note {
-    text-align: center;
-    font-size: 13.5px;
-    color: var(--white-dim);
-    font-weight: 300;
-    padding: 24px 0 4px;
-  }
-  .pp-proofs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-  }
-  .pp-proof-thumb {
-    position: relative;
-    aspect-ratio: 9/16;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    background: var(--dark3);
-  }
-  .pp-proof-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.35s ease, filter 0.35s ease; }
-  .pp-proof-thumb:hover img { transform: scale(1.06); }
-  .pp-proof-overlay {
-    position: absolute; inset: 0;
-    background: linear-gradient(to top, rgba(5,5,10,0.55), transparent 55%);
-    display: flex; align-items: flex-end; padding: 8px 10px;
-    opacity: 0; transition: opacity 0.25s;
-  }
+  .pp-proofs-toggle-btn:hover { background: var(--cv-glass-hi); border-color: var(--cv-border-strong); }
+  .pp-proofs-hidden-note { text-align: center; font-size: 13.5px; color: var(--cv-faint); font-weight: 400; padding: 24px 0 4px; }
+  .pp-proofs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .pp-proof-thumb { position: relative; aspect-ratio: 9/16; border-radius: 10px; overflow: hidden; border: 1px solid var(--cv-border); cursor: pointer; background: var(--cv-ink-3); }
+  .pp-proof-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
+  .pp-proof-thumb:hover img { transform: scale(1.04); }
+  .pp-proof-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(7,7,15,.55), transparent 55%); display: flex; align-items: flex-end; padding: 8px 10px; opacity: 0; transition: opacity .2s; }
   .pp-proof-thumb:hover .pp-proof-overlay { opacity: 1; }
-  .pp-proof-overlay span { font-size: 10.5px; color: var(--white); font-weight: 500; }
-
-  .pp-proofs-more {
-    text-align: center;
-    margin-top: 24px;
-  }
+  .pp-proof-overlay span { font-size: 10px; color: var(--cv-text); font-weight: 500; }
+  .pp-proofs-more { text-align: center; margin-top: 22px; }
   .pp-proofs-more button {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--white);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 11px 24px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); color: var(--cv-text);
+    font-size: 13px; font-weight: 600; padding: 11px 22px; border-radius: 10px; cursor: pointer; transition: background .15s, border-color .15s;
   }
-  .pp-proofs-more button:hover { background: var(--surface-hover, rgba(255,255,255,0.08)); }
+  .pp-proofs-more button:hover { background: var(--cv-glass-hi); border-color: var(--cv-border-strong); }
 
-  /* ---------- Floating "Hide Proofs" button ----------
-     Appears whenever the proofs gallery is open and scrolled into view, so
-     the user can collapse it without scrolling all the way back up to the
-     toggle at the top of the section. */
-  .pp-floating-hide-btn {
-    position: fixed;
-    left: 24px;
-    z-index: 1900;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(17,17,25,0.85);
-    backdrop-filter: blur(14px);
-    border: 1px solid var(--border);
-    color: var(--white);
-    font-size: 13px;
-    font-weight: 600;
-    font-family: 'Inter', sans-serif;
-    letter-spacing: 0.2px;
-    padding: 12px 20px;
-    border-radius: 30px;
-    cursor: pointer;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    transition: transform 0.15s, background 0.2s, border-color 0.2s;
-    animation: floatHideBtnIn 0.25s ease;
-  }
-  .pp-floating-hide-btn:hover {
-    background: rgba(139,92,246,0.18);
-    border-color: rgba(139,92,246,0.4);
-    transform: translateY(-2px);
-  }
-  .pp-floating-hide-btn:active { transform: translateY(0); }
-  .pp-floating-hide-btn-icon { font-size: 13px; line-height: 1; color: var(--violet-light); }
-  @keyframes floatHideBtnIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  /* ---------- Persistent side "Proofs" tab ----------
-     Always docked to the right edge of the viewport whenever the proofs
-     section itself isn't on screen — a constant, eye-catching shortcut so
-     buyers can jump straight to delivery proof from anywhere on the page. */
-  .pp-floating-view-proofs-tab {
-    position: fixed;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1850;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    background: linear-gradient(160deg, #8B5CF6, #22D3EE);
-    background-size: 160% 160%;
-    color: #0A0A13;
-    border: none;
-    padding: 18px 10px;
-    border-radius: 14px 0 0 14px;
-    cursor: pointer;
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
-    font-size: 11.5px;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    box-shadow:
-      -4px 0 0 rgba(139,92,246,0),
-      -10px 0 30px rgba(139,92,246,0.4),
-      inset 0 1px 0 rgba(255,255,255,0.25);
-    animation:
-      proofsTabShimmer 3.5s linear infinite,
-      proofsTabGlow 2.4s ease-in-out infinite,
-      proofsTabFloatIn 0.3s ease;
-    transition: padding-right 0.2s ease, transform 0.2s ease;
-  }
-  .pp-floating-view-proofs-tab:hover {
-    padding-right: 18px;
-    transform: translateY(-50%) translateX(-2px);
-  }
-  .pp-floating-view-proofs-tab:active {
-    transform: translateY(-50%) scale(0.96);
-  }
-  .pp-floating-view-proofs-icon {
-    font-size: 18px;
-    line-height: 1;
-    animation: proofsCtaIconBounce 1.5s ease-in-out infinite;
-  }
-  .pp-floating-view-proofs-text {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-  }
-  @keyframes proofsTabShimmer {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 160% 160%; }
-  }
-  @keyframes proofsTabGlow {
-    0%, 100% { box-shadow: -10px 0 30px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.25); }
-    50% { box-shadow: -14px 0 44px rgba(139,92,246,0.65), inset 0 1px 0 rgba(255,255,255,0.35); }
-  }
-  @keyframes proofsTabFloatIn {
-    from { opacity: 0; transform: translateY(-50%) translateX(24px); }
-    to { opacity: 1; transform: translateY(-50%) translateX(0); }
-  }
-
-  .pp-lightbox {
-    position: fixed; inset: 0; z-index: 2000;
-    background: rgba(5,5,10,0.92);
-    backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 40px 20px;
-  }
-  .pp-lightbox-img { max-height: 86vh; max-width: 92vw; border-radius: 14px; border: 1px solid var(--border); object-fit: contain; }
+  .pp-lightbox { position: fixed; inset: 0; z-index: 2000; background: rgba(7,7,15,.92); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+  .pp-lightbox-img { max-height: 86vh; max-width: 92vw; border-radius: 12px; border: 1px solid var(--cv-border); object-fit: contain; }
   .pp-lightbox-close, .pp-lightbox-nav {
-    position: absolute;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--white);
-    width: 42px; height: 42px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    font-size: 18px;
-    transition: background 0.2s;
+    position: absolute; background: var(--cv-glass); border: 1px solid var(--cv-border-strong); color: var(--cv-text);
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 17px; transition: background .15s;
   }
-  .pp-lightbox-close:hover, .pp-lightbox-nav:hover { background: rgba(139,92,246,0.2); }
+  .pp-lightbox-close:hover, .pp-lightbox-nav:hover { background: var(--cv-glass-hi); }
   .pp-lightbox-close { top: 24px; right: 24px; }
   .pp-lightbox-nav--prev { left: 24px; top: 50%; transform: translateY(-50%); }
   .pp-lightbox-nav--next { right: 24px; top: 50%; transform: translateY(-50%); }
-  .pp-lightbox-count { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--white-dim); }
+  .pp-lightbox-count { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--cv-muted); }
 
   /* ---------- Sticky Buy Now bar ---------- */
   .pp-sticky-buybar {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    z-index: 1800;
-    background: rgba(10,10,19,0.88);
-    backdrop-filter: blur(14px);
-    border-top: 1px solid var(--border);
-    padding: 14px 20px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1800;
+    background: rgba(11,11,24,.9); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--cv-border); padding: 14px 20px;
     padding-bottom: max(14px, env(safe-area-inset-bottom));
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    box-shadow: 0 -8px 32px rgba(0,0,0,0.35);
-    animation: stickySlideUp 0.25s ease;
+    display: flex; align-items: center; gap: 16px;
   }
-  @keyframes stickySlideUp {
-    from { transform: translateY(100%); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-  .pp-sticky-info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .pp-sticky-name {
-    font-size: 12.5px;
-    color: var(--white-dim);
-    font-weight: 400;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .pp-sticky-price {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--white);
-    white-space: nowrap;
-  }
-  .pp-sticky-price-strike {
-    font-size: 11.5px;
-    color: var(--white-dim);
-    text-decoration: line-through;
-    font-weight: 300;
-    margin-right: 6px;
-  }
-  .pp-sticky-timer {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(139,92,246,0.14);
-    border: 1px solid rgba(139,92,246,0.32);
-    border-radius: 9px;
-    padding: 8px 12px;
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-  .pp-sticky-timer-icon { font-size: 12px; line-height: 1; }
-  .pp-sticky-timer-value {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 13.5px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    color: var(--violet-light);
-    font-variant-numeric: tabular-nums;
-  }
-  .pp-sticky-timer-expired {
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255,80,80,0.85);
-    white-space: nowrap;
-  }
+  .pp-sticky-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pp-sticky-name { font-size: 12.5px; color: var(--cv-muted); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp-sticky-price { font-family: 'JetBrains Mono', monospace; font-size: 16.5px; font-weight: 600; color: var(--cv-text); white-space: nowrap; }
+  .pp-sticky-price-strike { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--cv-faint); text-decoration: line-through; font-weight: 400; margin-right: 6px; }
+  .pp-sticky-timer { display: flex; align-items: center; gap: 6px; background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 9px; padding: 8px 12px; flex-shrink: 0; white-space: nowrap; }
+  .pp-sticky-timer-value { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: .3px; color: var(--cv-text); font-variant-numeric: tabular-nums; }
+  .pp-sticky-timer-expired { font-size: 12px; font-weight: 600; color: var(--cv-pink); white-space: nowrap; }
   .pp-sticky-buy-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    background: var(--grad);
-    color: #0A0A13;
-    font-size: 14.5px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    padding: 13px 24px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    font-family: 'Inter', sans-serif;
-    transition: transform 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--cv-aurora); color: var(--cv-ink); font-size: 14px; font-weight: 700; letter-spacing: .1px;
+    padding: 12px 22px; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    font-family: 'Inter', sans-serif; transition: transform .15s ease;
   }
   .pp-sticky-buy-btn:hover { transform: translateY(-1px); }
-  .pp-sticky-buy-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-  /* ---------- Video section ---------- */
-  .pp-video-wrap {
-    position: relative;
-    max-width: 780px;
-    margin: 0 auto;
-    border-radius: 18px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    aspect-ratio: 16/9;
-    background: var(--dark3);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-  }
-  .pp-video-wrap iframe { width: 100%; height: 100%; border: none; display: block; }
+  .pp-sticky-buy-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 
   /* ---------- FAQ ---------- */
   .pp-faq { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-  .pp-faq-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-  }
+  .pp-faq-item { background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 12px; overflow: hidden; transition: border-color .15s ease; }
+  .pp-faq-item--open { border-color: var(--cv-border-strong); }
   .pp-faq-q {
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    color: var(--white);
-    font-size: 14.5px;
-    font-weight: 500;
-    font-family: 'Inter', sans-serif;
-    padding: 18px 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    width: 100%; text-align: left; background: none; border: none; color: var(--cv-text);
+    font-size: 14.5px; font-weight: 600; font-family: 'Inter', sans-serif; padding: 18px 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
-  .pp-faq-q-icon { color: var(--violet-light); font-size: 18px; transition: transform 0.25s; flex-shrink: 0; }
+  .pp-faq-q-icon {
+    width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+    background: var(--cv-ink-3); color: var(--cv-muted);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: transform .25s ease;
+  }
   .pp-faq-q-icon--open { transform: rotate(45deg); }
-  .pp-faq-a {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease, padding 0.3s ease;
-    padding: 0 20px;
-  }
+  .pp-faq-a { max-height: 0; overflow: hidden; transition: max-height .3s ease, padding .3s ease; padding: 0 20px; }
   .pp-faq-a--open { max-height: 240px; padding: 0 20px 18px; }
-  .pp-faq-a p { font-size: 13.5px; color: var(--white-dim); line-height: 1.7; font-weight: 300; }
+  .pp-faq-a p { font-size: 13.5px; color: var(--cv-muted); line-height: 1.7; font-weight: 400; }
 
-  /* ---------- Reviews (existing) ---------- */
-  .pp-reviews {
-    background: var(--dark2);
-    border-top: 1px solid var(--border);
-    padding: 80px 32px 90px;
-  }
+  /* ---------- Reviews ---------- */
+  .pp-reviews { position: relative; z-index: 2; background: var(--cv-ink-2); border-top: 1px solid var(--cv-border); padding: 76px 32px 86px; }
   .pp-reviews-inner { max-width: 860px; margin: 0 auto; }
   .pp-review-card {
-    background: var(--dark3);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 44px 44px 36px;
-    margin: 0 12px;
-    position: relative;
-    overflow: hidden;
+    background: var(--cv-glass); border: 1px solid var(--cv-border); border-radius: 16px;
+    padding: 40px 42px 34px; margin: 0 12px;
   }
-  .pp-review-card::before {
-    content: '"';
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 120px;
-    color: rgba(139,92,246,0.12);
-    position: absolute;
-    top: -20px; left: 20px;
-    line-height: 1;
-    pointer-events: none;
-  }
-  .pp-review-stars { color: var(--violet-light); font-size: 16px; letter-spacing: 3px; margin-bottom: 18px; }
-  .pp-review-text { font-size: clamp(1rem, 2vw, 1.15rem); color: var(--white); font-style: italic; font-weight: 300; line-height: 1.8; margin-bottom: 24px; }
-  .pp-review-divider { width: 36px; height: 2px; background: var(--grad); margin-bottom: 14px; border-radius: 2px; }
-  .pp-review-name { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--violet-light); font-weight: 600; }
+  .pp-review-stars { color: var(--cv-cyan); font-size: 14px; letter-spacing: 3px; margin-bottom: 16px; }
+  .pp-review-text { font-size: clamp(.98rem, 1.9vw, 1.08rem); color: var(--cv-text); font-weight: 400; line-height: 1.75; margin-bottom: 22px; }
+  .pp-review-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--cv-faint); font-weight: 600; }
+  .pp-review-name span { color: var(--cv-muted); }
 
-  .pp-reviews .slick-dots li button:before { color: var(--violet) !important; opacity: 0.3; font-size: 8px; }
-  .pp-reviews .slick-dots li.slick-active button:before { opacity: 1; color: var(--violet-light) !important; }
+  .pp-reviews .slick-dots li button:before { color: var(--cv-violet) !important; opacity: .3; font-size: 8px; }
+  .pp-reviews .slick-dots li.slick-active button:before { opacity: 1; color: var(--cv-cyan) !important; }
 
   @media (max-width: 900px) {
-    .pp-grid { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px 64px; }
+    .pp-shell-grid { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px 64px; }
     .pp-image-col { position: static; }
-    .pp-trust-row { flex-wrap: wrap; border-radius: 12px; }
-    .pp-trust-pill { min-width: 50%; }
     .pp-steps { grid-template-columns: 1fr 1fr; }
   }
 
   @media (max-width: 480px) {
-    .pp-review-card { padding: 32px 24px 28px; margin: 0; }
-    .pp-time-block { min-width: 52px; padding: 8px 10px; }
-    .pp-time-num { font-size: 1.4rem; }
+    .pp-review-card { padding: 30px 22px 26px; margin: 0; }
+    .pp-trust-row { grid-template-columns: repeat(2, 1fr); }
+    .pp-time-block { min-width: 48px; padding: 8px 10px; }
+    .pp-time-num { font-size: 1.2rem; }
     .pp-steps { grid-template-columns: 1fr; }
-    .pp-section { padding: 56px 20px; }
+    .pp-section { padding: 52px 20px; }
     .pp-plan-main { gap: 8px; }
     .pp-plan-badge { display: none; }
     .pp-sticky-name { display: none; }
     .pp-sticky-buybar { padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); gap: 10px; }
     .pp-sticky-timer { padding: 7px 9px; }
-    .pp-sticky-timer-value { font-size: 12.5px; }
-    .pp-floating-hide-btn { left: 16px; font-size: 12px; padding: 10px 16px; }
-    .pp-floating-view-proofs-tab { padding: 14px 8px; font-size: 10.5px; letter-spacing: 1.4px; }
-    .pp-floating-view-proofs-icon { font-size: 15px; }
-  }
-
-  /* ---------- Payment modal ---------- */
-  .pp-modal-overlay {
-    position: fixed; inset: 0; z-index: 2200;
-    background: rgba(5,5,10,0.82);
-    backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    animation: modalFadeIn 0.2s ease;
-  }
-  @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-  .pp-modal-card {
-    width: 100%;
-    max-width: 420px;
-    background: var(--dark3);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 28px 26px 24px;
-    position: relative;
-    box-shadow: 0 24px 70px rgba(0,0,0,0.5);
-    animation: modalSlideUp 0.25s ease;
-  }
-  @keyframes modalSlideUp {
-    from { opacity: 0; transform: translateY(16px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  .pp-modal-close {
-    position: absolute; top: 16px; right: 16px;
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--white-dim);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    font-size: 15px;
-    transition: background 0.2s;
-  }
-  .pp-modal-close:hover { background: rgba(139,92,246,0.2); }
-
-  .pp-modal-eyebrow {
-    font-size: 10px;
-    letter-spacing: 2.5px;
-    text-transform: uppercase;
-    color: var(--violet-light);
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-
-  .pp-modal-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--white);
-    margin-bottom: 4px;
-  }
-
-  .pp-modal-amount {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 2rem;
-    font-weight: 700;
-    background: var(--grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    margin: 10px 0 20px;
-  }
-
-  .pp-modal-field { margin-bottom: 14px; }
-  .pp-modal-label {
-    display: block;
-    font-size: 12px;
-    color: var(--white-dim);
-    font-weight: 400;
-    margin-bottom: 6px;
-    letter-spacing: 0.2px;
-  }
-  .pp-modal-input {
-    width: 100%;
-    background: var(--dark2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-    color: var(--white);
-    font-size: 14px;
-    font-family: 'Inter', sans-serif;
-    outline: none;
-    transition: border-color 0.2s;
-    box-sizing: border-box;
-  }
-  .pp-modal-input:focus { border-color: var(--violet); }
-  .pp-modal-input::placeholder { color: rgba(244,242,255,0.32); }
-
-  .pp-modal-error {
-    font-size: 12.5px;
-    color: rgba(255,110,110,0.9);
-    margin: -4px 0 14px;
-  }
-
-  .pp-modal-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 18px;
-  }
-
-  /* ---------- UPI app picker ---------- */
-  .pp-modal-section-label {
-    display: block;
-    font-size: 11px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--white-dim);
-    font-weight: 600;
-    margin: 20px 0 10px;
-  }
-
-  .pp-upi-apps-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .pp-upi-app-btn {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 11px 14px;
-    cursor: pointer;
-    text-align: left;
-    font-family: 'Inter', sans-serif;
-    transition: border-color 0.2s, background 0.2s, transform 0.15s;
-  }
-  .pp-upi-app-btn:hover {
-    border-color: rgba(139,92,246,0.4);
-    background: rgba(139,92,246,0.08);
-    transform: translateY(-1px);
-  }
-  .pp-upi-app-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
-  .pp-upi-app-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: #FFFFFF;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-  }
-  .pp-upi-app-icon img { width: 20px; height: 20px; object-fit: contain; }
-  .pp-upi-app-icon-fallback {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    color: #0A0A13;
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 700;
-    font-size: 14px;
-  }
-
-  .pp-upi-app-name {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--white);
-  }
-
-  .pp-upi-app-arrow {
-    font-size: 15px;
-    color: var(--white-dim);
-    flex-shrink: 0;
-    transition: transform 0.15s;
-  }
-  .pp-upi-app-btn:hover .pp-upi-app-arrow { transform: translateX(3px); color: var(--violet-light); }
-
-  .pp-modal-divider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 18px 0 4px;
-    color: var(--white-dim);
-    font-size: 11px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-  .pp-modal-divider::before, .pp-modal-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .pp-modal-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    padding: 13px 18px;
-    border-radius: 10px;
-    font-size: 14.5px;
-    font-weight: 700;
-    font-family: 'Inter', sans-serif;
-    cursor: pointer;
-    border: none;
-    transition: transform 0.15s, opacity 0.15s;
-  }
-  .pp-modal-btn:hover { transform: translateY(-1px); }
-  .pp-modal-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-  .pp-modal-btn--upi { background: var(--grad); color: #0A0A13; margin-top: 4px; }
-  .pp-modal-btn--bank {
-    background: var(--surface);
-    color: var(--white);
-    border: 1px solid var(--border);
-    margin-top: 4px;
-  }
-
-  .pp-modal-note {
-    font-size: 11.5px;
-    color: var(--white-dim);
-    text-align: center;
-    margin-top: 16px;
-    line-height: 1.6;
+    .pp-sticky-timer-value { font-size: 12px; }
   }
 `;
 
@@ -1492,14 +443,24 @@ const faqItems = [
   { q: "Is my payment secure?", a: "Yes — all payments are processed through an encrypted, PCI-compliant gateway. We never see or store your card details." },
 ];
 
+// Trust-row items — clean SVG icons instead of emoji, matching the homepage's icon language.
+const trustItems = [
+  { label: "Fast delivery", icon: <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" /> },
+  { label: "Secure payment", icon: <><path d="M5 10h14v10H5z" /><path d="M8 10V7a4 4 0 018 0v3" /></> },
+  { label: "Single ownership", icon: <path d="M12 2a10 10 0 100 20 10 10 0 000-20z" /> },
+  { label: "Replacement guarantee", icon: <path d="M4 4v6h6M20 20v-6h-6M20 4l-7 7M4 20l7-7" /> },
+];
+
 /**
  * Proof-of-delivery / proof-of-results screenshots shown for every product.
- * DUMMY DATA: replace `proofImages` below with `product.proofs` (an array of
- * real screenshot URLs) once the backend returns them per-product. Falls
- * back to placeholders so the section always has content to show.
+ * DUMMY DATA: replace with `product.proofs` (an array of real screenshot
+ * URLs) once the backend returns them per-product — the Product model does
+ * not currently define a `proofs` field, so add one there first if you want
+ * this to be per-product rather than store-wide. Falls back to placeholders
+ * so the section always has content to show.
  */
 const dummyProofImages = [
-  { "id": 1, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469334/proofs/fmvjx8nf4m0qkytv1tm9.jpg", "label": "4965327411218590780.jpg" },
+{ "id": 1, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469334/proofs/fmvjx8nf4m0qkytv1tm9.jpg", "label": "4965327411218590780.jpg" },
   { "id": 2, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469340/proofs/lapgci9ggunou3ooyo4b.jpg", "label": "4965327411218590781.jpg" },
   { "id": 3, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469344/proofs/dljlnvnndba4h3kp8j97.jpg", "label": "5010499051149437833.jpg" },
   { "id": 4, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469348/proofs/edowg2cntli4p13akpdh.jpg", "label": "5010499051149437834.jpg" },
@@ -1653,46 +614,25 @@ const dummyProofImages = [
   { "id": 152, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg", "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg" }
 ];
 
-const PROOFS_PREVIEW_COUNT = 12;
+// Kept below the dummy set's length on purpose — with only 12 dummy items and
+// a preview count of 12, `proofImages.length > PROOFS_PREVIEW_COUNT` was
+// always false, so the "show more" button never rendered. 8 leaves headroom
+// for both the dummy set and real per-product data from the backend.
+const PROOFS_PREVIEW_COUNT = 8;
 
-// Some products offer multiple duration tiers (3 / 6 / 12 months) instead of
-// a single price. Each config below describes how to detect that product
-// (by name) and what plans/pricing to show.
-//
-// fetchPrices: true  → each plan is its own product record in the backend;
-//                       we fetch its real price/strike-through price by id.
-// fetchPrices: false → prices are fixed and known up front, so we use them
-//                       directly with no extra network round trip.
-const multiPlanConfigs = [
-  {
-    key: "tradingview",
-    match: (name) => (name || "").toLowerCase().includes("tradingview"),
-    fetchPrices: true,
-    plans: [
-      { id: "6",  duration: "3 Months" },
-      { id: "12", duration: "6 Months" },
-      { id: "18", duration: "12 Months" },
-    ],
-  },
-  {
-    key: "higgsfield-max-plan",
-    // Case-insensitive match against the lowercased product name — the
-    // previous version compared against a mixed-case string, which never
-    // matched and silently fell back to the single-price layout.
-    match: (name) => {
-      const n = (name || "").toLowerCase();
-      return n.includes("higgsfield") && n.includes("max");
-    },
-    fetchPrices: true,
-    plans: [
-      { id: "26", duration: "3 Months" },
-      { id: "25", duration: "6 Months" },
-      { id: "24", duration: "12 Months" },
-    ],
-  },
-];
+const USD_TO_INR_RATE = 99;
+
+function convertUsdToInr(usdAmount) {
+  const n = Number(usdAmount);
+  if (Number.isNaN(n)) return null;
+  return Math.round(n * USD_TO_INR_RATE);
+}
+
 
 const ProductPage = () => {
+  const navigate = useNavigate();
+  const { requireAuth } = useAuth();
+
   const [product,   setProduct]   = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error,     setError]     = useState("");
@@ -1700,15 +640,12 @@ const ProductPage = () => {
   const [proofsHidden, setProofsHidden] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
-  const [selectedPlanId, setSelectedPlanId] = useState(null);
-  const [showStickyBar, setShowStickyBar] = useState(false);
 
-  // Whether the proofs section is currently intersecting the viewport at
-  // all (regardless of whether the user has manually "hidden" it). Drives
-  // BOTH floating buttons below: the collapse ("Hide Proofs") button when
-  // the section is in view, and the persistent side "Proofs" shortcut tab
-  // whenever it's not — so there's always exactly one way to reach it.
-  const [proofsInView, setProofsInView] = useState(false);
+  // Index into product.plans — plans are embedded sub-documents with
+  // `{ _id: false }` in the schema, so there's no plan id to key off of.
+  const [selectedPlanIndex, setSelectedPlanIndex] = useState(0);
+
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
   // Countdown target: midnight tonight (00:00 the next calendar day), computed
   // once via the lazy initializer so it stays fixed for the whole session
@@ -1718,27 +655,6 @@ const ProductPage = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
   });
-
-  // Real per-plan prices. Keyed by plan id.
-  // { "6": { price: 999, strikeThroughPrice: 1499 }, ... }
-  const [planPrices, setPlanPrices] = useState({});
-  const [planPricesLoading, setPlanPricesLoading] = useState(false);
-
-  // ── Payment modal state ─────────────────────────────────────────────────
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [modalOrder, setModalOrder] = useState(null); // { amount, productId, productName }
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [modalError, setModalError] = useState("");
-  // "gpay" | "phonepe" | "paytm" | "upi" | "bank" | null — which button is
-  // currently mid-submit, so we can disable the rest and show status text.
-  const [submittingMethod, setSubmittingMethod] = useState(null);
-  // Tracks the post-UPI-click "did the buyer leave and come back" flow: once
-  // they tap one of the UPI app buttons we set upiInitiated, then watch for
-  // the tab becoming visible again (they've returned from their UPI app) to
-  // swap the app picker for a single "Proceed to WhatsApp" confirmation step.
-  const [upiInitiated, setUpiInitiated] = useState(false);
-  const [showUpiWhatsappCta, setShowUpiWhatsappCta] = useState(false);
 
   const { id } = useParams();
   const buyBtnAnchorRef = useRef(null);
@@ -1761,6 +677,9 @@ const ProductPage = () => {
         const response = await fetch(`${apiBase}/products/${id}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Failed to fetch product");
+        if (!Array.isArray(data.plans) || data.plans.length === 0) {
+          throw new Error("This product has no pricing plans configured.");
+        }
         setProduct(data);
       } catch (err) {
         setError(err.message || "An error occurred while fetching the product.");
@@ -1772,61 +691,9 @@ const ProductPage = () => {
     fetchProduct();
   }, [id]);
 
-  // Once the product loads, pick the default selected plan for whichever
-  // multi-plan config (if any) matches this product's name.
+  // Reset to the first plan whenever a (new) product loads.
   useEffect(() => {
-    if (!product) return;
-    const config = multiPlanConfigs.find(c => c.match(product.name));
-    setSelectedPlanId(config ? config.plans[0].id : null);
-  }, [product]);
-
-  // Once we know which multi-plan config (if any) matches this product,
-  // populate planPrices — either by fetching each plan's real price from
-  // the backend (fetchPrices: true) or by using the fixed prices already
-  // baked into the config (fetchPrices: false).
-  useEffect(() => {
-    if (!product) return;
-    const config = multiPlanConfigs.find(c => c.match(product.name));
-    if (!config) return;
-
-    if (!config.fetchPrices) {
-      setPlanPrices(Object.fromEntries(
-        config.plans.map(plan => [
-          plan.id,
-          { price: plan.price, strikeThroughPrice: plan.strikeThroughPrice || null },
-        ])
-      ));
-      return;
-    }
-
-    let cancelled = false;
-    const apiBase = process.env.REACT_APP_API_BASE || "https://chartvault.shop/api";
-
-    const fetchPlanPrices = async () => {
-      setPlanPricesLoading(true);
-      try {
-        const results = await Promise.all(
-          config.plans.map(async (plan) => {
-            try {
-              const res = await fetch(`${apiBase}/products/${plan.id}`);
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.message || "Failed to fetch plan price");
-              return [plan.id, { price: data.price, strikeThroughPrice: data.strikeThroughPrice }];
-            } catch {
-              return [plan.id, { price: null, strikeThroughPrice: null }];
-            }
-          })
-        );
-        if (!cancelled) {
-          setPlanPrices(Object.fromEntries(results));
-        }
-      } finally {
-        if (!cancelled) setPlanPricesLoading(false);
-      }
-    };
-
-    fetchPlanPrices();
-    return () => { cancelled = true; };
+    setSelectedPlanIndex(0);
   }, [product]);
 
   // Show a sticky Buy Now bar once the main buy button scrolls out of view,
@@ -1843,176 +710,45 @@ const ProductPage = () => {
     return () => observer.disconnect();
   }, [product, isLoading]);
 
-  // Track whether the proofs section itself is on screen. This single
-  // observer feeds both floating buttons: when the section IS in view (and
-  // hasn't been manually hidden) we show "Hide Proofs"; whenever it's NOT in
-  // view we show the persistent side "Proofs" shortcut tab instead, so a
-  // way back to the proofs is always available no matter where on the page
-  // the visitor currently is.
-  useEffect(() => {
-    if (!product || !proofsSectionRef.current) {
-      setProofsInView(false);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setProofsInView(entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(proofsSectionRef.current);
-    return () => observer.disconnect();
-  }, [product, isLoading]);
-
-  // Buy Now no longer navigates straight to the payment page — it opens the
-  // payment modal (amount + contact details + payment app picker) instead.
+  // ── Buy Now handler ───────────────────────────────────────────────────
+  // Payment has been stripped out entirely — wire up your new payment flow
+  // (redirect to a checkout page, open your own modal, call your gateway's
+  // SDK, etc.) inside this function. `plan` is the selected sub-document
+  // from product.plans, so it carries name/durationInMonths/price/
+  // strikeThroughPrice for whatever checkout payload you build.
   const handleBuyNowClick = () => {
-    if (!product || typeof product.price === "undefined") {
-      alert("Error: Could not retrieve product details. Please try again later.");
-      return;
-    }
-    openPaymentModal({ amount: product.price, productId: id, productName: product.name || "Product" });
-  };
-
-  // Multi-plan products (TradingView, Higgs Field Max, etc.): "Buy Now"
-  // opens the same payment modal, using the selected plan's price.
-  const handleMultiPlanBuyNowClick = () => {
-    const config = multiPlanConfigs.find(c => c.match(product?.name));
-    const plan = config?.plans.find(p => p.id === selectedPlanId);
-    const price = planPrices[selectedPlanId]?.price;
-
-    if (!plan || price === null || typeof price === "undefined") {
+    const plan = product?.plans?.[selectedPlanIndex];
+    if (!product || !plan || typeof plan.price === "undefined") {
       alert("Error: Could not retrieve plan pricing. Please try again in a moment.");
       return;
     }
 
-    openPaymentModal({
-      amount: price,
-      productId: plan.id,
-      productName: `${product?.name || "Product"} — ${plan.duration}`,
-    });
-  };
-
-  const openPaymentModal = (order) => {
-    setModalOrder(order);
-    setContactEmail("");
-    setContactPhone("");
-    setModalError("");
-    setSubmittingMethod(null);
-    setUpiInitiated(false);
-    setShowUpiWhatsappCta(false);
-    setShowPaymentModal(true);
-  };
-
-  const closePaymentModal = () => {
-    if (submittingMethod) return; // don't let them close mid-submit
-    setShowPaymentModal(false);
-    setModalOrder(null);
-    setUpiInitiated(false);
-    setShowUpiWhatsappCta(false);
-  };
-
-  // Once the buyer has tapped one of the UPI app buttons (upiInitiated),
-  // watch for them returning to this tab — that's our signal they've been
-  // over to their UPI app and (hopefully) finished paying. When they come
-  // back, swap the app picker for "Proceed to WhatsApp" so they can go
-  // confirm the order.
-  useEffect(() => {
-    if (!showPaymentModal || !upiInitiated) return;
-
-    const handleReturn = () => {
-      if (document.visibilityState === "visible") {
-        setShowUpiWhatsappCta(true);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleReturn);
-    window.addEventListener("focus", handleReturn); // fallback for in-app webviews
-    return () => {
-      document.removeEventListener("visibilitychange", handleReturn);
-      window.removeEventListener("focus", handleReturn);
-    };
-  }, [showPaymentModal, upiInitiated]);
-
-  // Sends the buyer straight to WhatsApp — used for bank transfer (always)
-  // and for the "Proceed to WhatsApp" state after they've already paid via
-  // a UPI app and come back to the tab.
-  const goToWhatsApp = (context) => {
-    if (!modalOrder) return;
-    const link = buildWhatsAppLink({
-      amount: modalOrder.amount,
-      productName: modalOrder.productName,
-      context,
-    });
-    window.location.href = link;
-  };
-
-  // Validates the contact fields, notifies the backend (which relays the
-  // order to Telegram), then either fires the chosen UPI app's deep link or
-  // sends the buyer straight to WhatsApp for bank transfer.
-  // `method` is one of: "gpay" | "phonepe" | "paytm" | "upi" | "bank".
-  const submitPayment = async (method) => {
-    if (!modalOrder) return;
-
-    if (!isValidEmailOrUsername(contactEmail)) {
-      setModalError("Please enter a valid email or TradingView username.");
+    const amountInINR = convertUsdToInr(plan.price);
+    if (amountInINR === null) {
+      alert("Error: Could not calculate the payment amount. Please try again.");
       return;
     }
-    if (!isValidIndianPhone(contactPhone)) {
-      setModalError("Please enter a valid 10-digit phone number.");
-      return;
-    }
-    setModalError("");
-    setSubmittingMethod(method);
 
-    const orderPayload = {
-      productId: modalOrder.productId,
-      productName: modalOrder.productName,
-      amount: modalOrder.amount,
-      email: contactEmail.trim(),
-      phone: contactPhone.trim(),
-      method,
-    };
-
-    try {
-      await fetch(getNotifyEndpoint(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderPayload),
+    requireAuth(() => {
+      navigate("/payment", {
+        state: {
+          productId: product.id ?? product._id,
+          productName: product.name,
+          planName: formatPlanDuration(plan),
+          amount: amountInINR,       // rupees — what PaymentPage.js's UPI flow expects
+          amountUSD: plan.price,     // kept too, in case you want it for crypto display later
+        },
       });
-    } catch (err) {
-      // Don't block the payment flow on a notify failure — the buyer still
-      // needs to be able to pay. Just log it for now.
-      console.error("Failed to notify backend of order:", err);
-    }
-
-    if (method === "bank") {
-      // Bank transfer goes straight to WhatsApp instead of a payment app.
-      goToWhatsApp("bank");
-      return;
-    }
-
-    // Any of gpay / phonepe / paytm / upi: open that specific app (or, for
-    // "upi", the OS's normal UPI app chooser) with the amount pre-filled.
-    const link = buildAppUpiDeepLink(method, {
-      amount: modalOrder.amount,
-      note: `${modalOrder.productName} - ${id}`,
     });
-    setUpiInitiated(true);
-    window.location.href = link;
-    // Give the deep link a brief moment to hand off to the app before
-    // resetting the button state (in case it doesn't leave the page, e.g.
-    // on desktop where no UPI app is installed).
-    setTimeout(() => setSubmittingMethod(null), 2500);
   };
 
   // Compact renderer used for the countdown chip inside the sticky Buy Now
   // bar — same countdownEnd target as the main timer, just a smaller display
   // so it fits next to the price and button.
   const renderStickyCountdown = ({ hours, minutes, seconds, completed }) => {
-    if (completed) return <span className="pp-sticky-timer-expired">Offer Expired</span>;
+    if (completed) return <span className="pp-sticky-timer-expired">Offer expired</span>;
     return (
       <span className="pp-sticky-timer">
-        <span className="pp-sticky-timer-icon">⏳</span>
         <span className="pp-sticky-timer-value">
           {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
         </span>
@@ -2033,11 +769,18 @@ const ProductPage = () => {
     return (
       <>
         <style>{style}</style>
-        <div className="pp-loading">
-          <div className="pp-loading-dots">
-            <div className="pp-loading-dot" /><div className="pp-loading-dot" /><div className="pp-loading-dot" />
+        <div className="pp-root">
+          <div className="pp-aurora-field">
+            <span className="pp-aurora-blob b1" />
+            <span className="pp-aurora-blob b2" />
           </div>
-          <p>Loading product details…</p>
+          <div className="pp-grain" />
+          <div className="pp-loading">
+            <div className="pp-loading-dots">
+              <div className="pp-loading-dot" /><div className="pp-loading-dot" /><div className="pp-loading-dot" />
+            </div>
+            <p>Loading product details…</p>
+          </div>
         </div>
       </>
     );
@@ -2047,49 +790,42 @@ const ProductPage = () => {
     return (
       <>
         <style>{style}</style>
-        <div className="pp-error">
-          <span className="pp-error-icon">⚠️</span>
-          <p>{error || "Product not found"}</p>
+        <div className="pp-root">
+          <div className="pp-aurora-field">
+            <span className="pp-aurora-blob b1" />
+            <span className="pp-aurora-blob b2" />
+          </div>
+          <div className="pp-grain" />
+          <div className="pp-error">
+            <span className="pp-error-icon">⚠</span>
+            <p>{error || "Product not found"}</p>
+          </div>
         </div>
       </>
     );
   }
 
-  // ── Real prices, taken directly from the product record ──────────────────────
-  const displayPrice  = formatINR(product.price);
-  const displayStrike = product.strikeThroughPrice ? formatINR(product.strikeThroughPrice) : null;
-  const discount = (product.strikeThroughPrice && product.price)
-    ? Math.round(((product.strikeThroughPrice - product.price) / product.strikeThroughPrice) * 100)
-    : null;
+  // ── Real pricing, taken directly from the model's embedded plans ──────
+  const plans = product.plans; // guaranteed non-empty by the fetch check above
+  const isMultiPlan = plans.length > 1;
+  const selectedPlan = plans[selectedPlanIndex] || plans[0];
+
+  const displayPrice  = formatUSD(selectedPlan.price);
+  const hasSelectedPlanStrike = Boolean(selectedPlan.strikeThroughPrice) && Number(selectedPlan.strikeThroughPrice) > Number(selectedPlan.price);
+  const displayStrike = hasSelectedPlanStrike ? formatUSD(selectedPlan.strikeThroughPrice) : null;
+  const discount = hasSelectedPlanStrike
+    ? Math.round(((selectedPlan.strikeThroughPrice - selectedPlan.price) / selectedPlan.strikeThroughPrice) * 100)
+    : 0;
   // ───────────────────────────────────────────────────────────────────────────
 
-  const activePlanConfig = multiPlanConfigs.find(c => c.match(product?.name)) || null;
-  const isMultiPlan = !!activePlanConfig;
-  const currentPlans = activePlanConfig ? activePlanConfig.plans : [];
-
-  const selectedPlanPrice = planPrices[selectedPlanId]?.price;
-  const selectedPlanStrike = planPrices[selectedPlanId]?.strikeThroughPrice;
-  const selectedPlanDuration = currentPlans.find(p => p.id === selectedPlanId)?.duration;
-
-  // Values the sticky bar and its Buy Now button use, regardless of product type.
-  const stickyPrice = isMultiPlan ? selectedPlanPrice : product.price;
-  const stickyStrike = isMultiPlan ? selectedPlanStrike : product.strikeThroughPrice;
-  const stickyPriceDisplay = formatINR(stickyPrice);
-  const stickyStrikeDisplay = (stickyStrike && stickyPrice && Number(stickyStrike) > Number(stickyPrice))
-    ? formatINR(stickyStrike)
-    : null;
-  const stickyDisabled = isMultiPlan && (planPricesLoading || selectedPlanPrice === null || typeof selectedPlanPrice === "undefined");
-  const stickyHandler = isMultiPlan ? handleMultiPlanBuyNowClick : handleBuyNowClick;
+  // The sticky bottom bar always mirrors whatever plan is currently selected.
+  const stickyPriceDisplay = displayPrice;
+  const stickyStrikeDisplay = displayStrike;
 
   // Proofs: prefer real per-product data from the backend, fall back to dummy set.
   const proofImages = (product.proofs && product.proofs.length > 0) ? product.proofs : dummyProofImages;
   const visibleProofs = showAllProofs ? proofImages : proofImages.slice(0, PROOFS_PREVIEW_COUNT);
-
-  // The "Hide Proofs" floating pill only makes sense once the section is
-  // both visible on screen AND not already collapsed by the user. The
-  // side "Proofs" shortcut tab covers every other state.
-  const showFloatingHideBtn = proofsInView && !proofsHidden;
-  const showFloatingViewProofsTab = !proofsInView;
+  const hasMoreProofs = proofImages.length > PROOFS_PREVIEW_COUNT;
 
   const carouselSettings = {
     dots: true, infinite: true, speed: 800,
@@ -2107,30 +843,46 @@ const ProductPage = () => {
       <style>{style}</style>
       <div className="pp-root">
 
-        <div className="pp-grid">
+        <div className="pp-aurora-field">
+          <span className="pp-aurora-blob b1" />
+          <span className="pp-aurora-blob b2" />
+        </div>
+        <div className="pp-grain" />
+
+        <div className="pp-shell-grid">
 
           <div className="pp-image-col">
             <div className="pp-image-wrap">
-              {discount ? <span className="pp-discount-badge">{discount}% OFF</span> : null}
+              {discount ? <span className="pp-discount-badge"><strong>{discount}%</strong> off</span> : null}
               <img src={product.image} alt={product.name} className="pp-product-img" />
             </div>
             <div className="pp-trust-row">
-              {["⚡ Fast Delivery","🔒 Secure Payment","♾️ Single Ownership","🔄 Replacement Guarantee"].map(t => (
-                <span key={t} className="pp-trust-pill">{t}</span>
+              {trustItems.map(t => (
+                <span key={t.label} className="pp-trust-pill">
+                  <span className="pp-trust-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      {t.icon}
+                    </svg>
+                  </span>
+                  {t.label}
+                </span>
               ))}
             </div>
           </div>
 
           <div className="pp-detail-col">
-            <span className="pp-eyebrow">Digital Product · Premium</span>
+            <span className="pp-eyebrow">
+              <span className="pp-eyebrow-dot" />
+              {product.brand ? `${product.brand} · Digital Product` : "Digital Product · Premium"}
+            </span>
             <h1 className="pp-title">{product.name}</h1>
 
             <div className="pp-countdown-card">
-              <p className="pp-countdown-label"><span className="pp-live-dot" />⏳ Limited time offer ends in</p>
+              <p className="pp-countdown-label"><span className="pp-live-dot" />Offer ends in</p>
               <Countdown
                 date={countdownEnd}
                 renderer={({ hours, minutes, seconds, completed }) => {
-                  if (completed) return <span className="pp-expired">Offer Expired</span>;
+                  if (completed) return <span className="pp-expired">Offer expired</span>;
                   return (
                     <div className="pp-countdown-display">
                       {[{ val: hours, label: "HRS" }, { val: minutes, label: "MIN" }, { val: seconds, label: "SEC" }].map(({ val, label }, i) => (
@@ -2148,7 +900,8 @@ const ProductPage = () => {
               />
             </div>
 
-            {/* ── Real pricing, straight from the backend ── */}
+            {/* Single-plan products show one price up top. Multi-plan
+                products show price per-card in the plan list instead. */}
             {!isMultiPlan && (
               <div className="pp-pricing">
                 <span className="pp-price-current">{displayPrice}</span>
@@ -2160,66 +913,47 @@ const ProductPage = () => {
             {/* This ref marks where the "main" buy button lives. Once it scrolls
                 out of view, the sticky bottom bar takes over as the CTA. */}
             <div ref={buyBtnAnchorRef}>
-              {isMultiPlan ? (
-                <>
-                  <div className="pp-plans">
-                    <span className="pp-plan-label">Choose your plan</span>
-                    {currentPlans.map((plan, idx) => {
-                      const isActive = selectedPlanId === plan.id;
-                      const price = planPrices[plan.id]?.price;
-                      const strikePrice = planPrices[plan.id]?.strikeThroughPrice;
-                      const hasPrice = price !== null && typeof price !== "undefined";
-                      const hasStrike = hasPrice && strikePrice && Number(strikePrice) > Number(price);
-                      return (
-                        <button
-                          key={plan.id}
-                          type="button"
-                          className={`pp-plan-card ${isActive ? "pp-plan-card--active" : ""}`}
-                          onClick={() => setSelectedPlanId(plan.id)}
-                        >
-                          <span className="pp-plan-main">
-                            <span className="pp-plan-radio"><span className="pp-plan-radio-dot" /></span>
-                            <span className="pp-plan-duration">{plan.duration}</span>
-                            {idx === currentPlans.length - 1 && (
-                              <span className="pp-plan-badge">Best Value</span>
-                            )}
-                          </span>
-                          {hasPrice ? (
-                            <span className="pp-plan-price-col">
-                              {hasStrike && (
-                                <span className="pp-plan-price-strike">{formatINR(strikePrice)}</span>
-                              )}
-                              <span className="pp-plan-price">{formatINR(price)}</span>
-                            </span>
-                          ) : (
-                            <span className="pp-plan-price pp-plan-price--loading">
-                              {planPricesLoading ? "Loading…" : "—"}
-                            </span>
+              {isMultiPlan && (
+                <div className="pp-plans">
+                  <span className="pp-plan-label">Choose your plan</span>
+                  {plans.map((plan, idx) => {
+                    const isActive = selectedPlanIndex === idx;
+                    const hasStrike = Boolean(plan.strikeThroughPrice) && Number(plan.strikeThroughPrice) > Number(plan.price);
+                    return (
+                      <button
+                        key={`${plan.name}-${idx}`}
+                        type="button"
+                        className={`pp-plan-card ${isActive ? "pp-plan-card--active" : ""}`}
+                        onClick={() => setSelectedPlanIndex(idx)}
+                      >
+                        <span className="pp-plan-main">
+                          <span className="pp-plan-radio"><span className="pp-plan-radio-dot" /></span>
+                          <span className="pp-plan-duration">{formatPlanDuration(plan)}</span>
+                          {idx === plans.length - 1 && (
+                            <span className="pp-plan-badge">Best value</span>
                           )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button type="button" className="pp-proofs-cta" onClick={scrollToProofs}>
-                    <span className="pp-proofs-cta-icon">🔍</span>
-                    See Real Proof It Works
-                    <span className="pp-proofs-cta-arrow">→</span>
-                  </button>
-
-                  <button
-                    className="pp-buy-btn"
-                    onClick={handleMultiPlanBuyNowClick}
-                    disabled={planPricesLoading || selectedPlanPrice === null || typeof selectedPlanPrice === "undefined"}
-                  >
-                    Buy Now{selectedPlanPrice ? ` — ${formatINR(selectedPlanPrice)}` : ""} <span className="pp-btn-arrow">→</span>
-                  </button>
-                </>
-              ) : (
-                <button className="pp-buy-btn" onClick={handleBuyNowClick}>
-                  Buy Now — {displayPrice} <span className="pp-btn-arrow">→</span>
-                </button>
+                        </span>
+                        <span className="pp-plan-price-col">
+                          {hasStrike && (
+                            <span className="pp-plan-price-strike">{formatUSD(plan.strikeThroughPrice)}</span>
+                          )}
+                          <span className="pp-plan-price">{formatUSD(plan.price)}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
+
+              <button className="pp-buy-btn" onClick={handleBuyNowClick}>
+                Buy now — {displayPrice} <span className="pp-btn-arrow">→</span>
+              </button>
+            </div>
+
+            <div className="pp-proofs-link-row">
+              <button type="button" className="pp-proofs-link" onClick={scrollToProofs}>
+                View delivery proof <span aria-hidden="true">↓</span>
+              </button>
             </div>
 
             <p className="pp-cta-note">
@@ -2227,7 +961,7 @@ const ProductPage = () => {
             </p>
 
             <div className="pp-description">
-              <h3 className="pp-desc-heading">What's Included</h3>
+              <h3 className="pp-desc-heading">What's included</h3>
               {product.description ? (
                 <div
                   className="pp-desc-body"
@@ -2238,15 +972,13 @@ const ProductPage = () => {
               )}
             </div>
 
-           
-
             {error && <p className="pp-inline-error">{error}</p>}
           </div>
         </div>
 
         {/* ---------- Purchase process ---------- */}
         <section className="pp-section">
-          <p className="pp-section-eyebrow">How It Works</p>
+          <p className="pp-section-eyebrow">How it works</p>
           <h2 className="pp-section-title">From click to access, in minutes</h2>
           <p className="pp-section-sub">No manual approval, no waiting on hold — the entire process is built to be fast and self-serve.</p>
           <div className="pp-steps">
@@ -2262,7 +994,7 @@ const ProductPage = () => {
 
         {/* ---------- Proofs gallery ---------- */}
         <section className="pp-section" ref={proofsSectionRef}>
-          <p className="pp-section-eyebrow">Proof, Not Promises</p>
+          <p className="pp-section-eyebrow">Proof, not promises</p>
           <h2 className="pp-section-title">Real orders, real deliveries</h2>
           <p className="pp-section-sub">A sample of confirmation screenshots from past buyers of this product. Tap any image to view it larger.</p>
 
@@ -2272,12 +1004,12 @@ const ProductPage = () => {
               className="pp-proofs-toggle-btn"
               onClick={() => setProofsHidden(h => !h)}
             >
-              {proofsHidden ? "Show Proofs" : "Hide Proofs"}
+              {proofsHidden ? "Show proofs" : "Hide proofs"}
             </button>
           </div>
 
           {proofsHidden ? (
-            <p className="pp-proofs-hidden-note">Proofs section hidden — click "Show Proofs" above to view them.</p>
+            <p className="pp-proofs-hidden-note">Proofs section hidden — click "Show proofs" above to view them.</p>
           ) : (
             <>
               <div className="pp-proofs-grid">
@@ -2288,27 +1020,27 @@ const ProductPage = () => {
                   </div>
                 ))}
               </div>
-              {!showAllProofs && proofImages.length > PROOFS_PREVIEW_COUNT && (
+              {!showAllProofs && hasMoreProofs && (
                 <div className="pp-proofs-more">
-                  <button onClick={() => setShowAllProofs(true)}>Show 100+ more</button>
+                  <button onClick={() => setShowAllProofs(true)}>
+                    Show all {proofImages.length} proofs
+                  </button>
                 </div>
               )}
             </>
           )}
         </section>
 
-
-
         {/* ---------- FAQ ---------- */}
         <section className="pp-section">
-          <p className="pp-section-eyebrow">Good To Know</p>
+          <p className="pp-section-eyebrow">Good to know</p>
           <h2 className="pp-section-title">Frequently asked questions</h2>
           <p className="pp-section-sub">Still unsure? Here's what most buyers ask before checking out.</p>
           <div className="pp-faq">
             {faqItems.map((item, idx) => {
               const isOpen = openFaq === idx;
               return (
-                <div className="pp-faq-item" key={item.q}>
+                <div className={`pp-faq-item ${isOpen ? "pp-faq-item--open" : ""}`} key={item.q}>
                   <button className="pp-faq-q" onClick={() => setOpenFaq(isOpen ? null : idx)}>
                     {item.q}
                     <span className={`pp-faq-q-icon ${isOpen ? "pp-faq-q-icon--open" : ""}`}>+</span>
@@ -2325,17 +1057,16 @@ const ProductPage = () => {
         {/* ---------- Reviews ---------- */}
         <section className="pp-reviews">
           <div className="pp-reviews-inner">
-            <p className="pp-section-eyebrow">Customer Testimonials</p>
+            <p className="pp-section-eyebrow">Customer testimonials</p>
             <h2 className="pp-section-title">What our customers say</h2>
-            <div style={{ marginTop: 48 }}>
+            <div style={{ marginTop: 44 }}>
               <Slider {...carouselSettings}>
                 {reviews.map(review => (
                   <div key={review.id}>
                     <div className="pp-review-card">
                       <div className="pp-review-stars">★★★★★</div>
                       <p className="pp-review-text">{review.review}</p>
-                      <div className="pp-review-divider" />
-                      <p className="pp-review-name">{review.name} — {review.city}</p>
+                      <p className="pp-review-name">{review.name} <span>— {review.city}</span></p>
                     </div>
                   </div>
                 ))}
@@ -2346,177 +1077,24 @@ const ProductPage = () => {
 
       </div>
 
-      {/* ---------- Floating "Hide Proofs" button ----------
-          Shown while the proofs gallery is open and in view. Its bottom
-          offset shifts up when the sticky Buy Now bar is also visible, so
-          the two never overlap. */}
-      {showFloatingHideBtn && (
-        <button
-          type="button"
-          className="pp-floating-hide-btn"
-          style={{ bottom: showStickyBar ? 96 : 28 }}
-          onClick={() => setProofsHidden(true)}
-        >
-          <span className="pp-floating-hide-btn-icon">✕</span> Hide Proofs
-        </button>
-      )}
-
-      {/* ---------- Persistent side "Proofs" tab ----------
-          Docked to the right edge of the viewport whenever the proofs
-          section is scrolled out of view — always available, from anywhere
-          on the page, as a shortcut straight to delivery proof. */}
-      {showFloatingViewProofsTab && (
-        <button
-          type="button"
-          className="pp-floating-view-proofs-tab"
-          onClick={scrollToProofs}
-          aria-label="Jump to delivery proofs"
-        >
-          <span className="pp-floating-view-proofs-icon">🔍</span>
-          <span className="pp-floating-view-proofs-text">Proofs</span>
-        </button>
-      )}
-
       {/* ---------- Sticky Buy Now bar (appears once the main CTA scrolls out of view) ---------- */}
       {showStickyBar && (
         <div className="pp-sticky-buybar">
           <div className="pp-sticky-info">
             <span className="pp-sticky-name">
-              {product.name}{isMultiPlan && selectedPlanDuration ? ` — ${selectedPlanDuration}` : ""}
+              {product.name}{isMultiPlan ? ` — ${formatPlanDuration(selectedPlan)}` : ""}
             </span>
             <span className="pp-sticky-price">
               {stickyStrikeDisplay && (
                 <span className="pp-sticky-price-strike">{stickyStrikeDisplay}</span>
               )}
-              {stickyPriceDisplay || (isMultiPlan ? "Loading…" : "")}
+              {stickyPriceDisplay}
             </span>
           </div>
           <Countdown date={countdownEnd} renderer={renderStickyCountdown} />
-          <button
-            className="pp-sticky-buy-btn"
-            onClick={stickyHandler}
-            disabled={stickyDisabled}
-          >
-            Buy Now <span className="pp-btn-arrow">→</span>
+          <button className="pp-sticky-buy-btn" onClick={handleBuyNowClick}>
+            Buy now <span className="pp-btn-arrow">→</span>
           </button>
-        </div>
-      )}
-
-      {/* ---------- Payment modal ---------- */}
-      {showPaymentModal && modalOrder && (
-        <div className="pp-modal-overlay" onClick={closePaymentModal}>
-          <div className="pp-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="pp-modal-close"
-              onClick={closePaymentModal}
-              aria-label="Close"
-              disabled={!!submittingMethod}
-            >
-              ✕
-            </button>
-
-            <span className="pp-modal-eyebrow">Complete Your Order</span>
-            <div className="pp-modal-title">{modalOrder.productName}</div>
-            <div className="pp-modal-amount">{formatINR(modalOrder.amount)}</div>
-
-            <div className="pp-modal-field">
-              <label className="pp-modal-label" htmlFor="pp-modal-email">
-                Email / TradingView username
-              </label>
-              <input
-                id="pp-modal-email"
-                className="pp-modal-input"
-                type="text"
-                placeholder="you@example.com or tv_username"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                disabled={!!submittingMethod}
-              />
-            </div>
-
-            <div className="pp-modal-field">
-              <label className="pp-modal-label" htmlFor="pp-modal-phone">
-                Phone number
-              </label>
-              <input
-                id="pp-modal-phone"
-                className="pp-modal-input"
-                type="tel"
-                placeholder="10-digit mobile number"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                disabled={!!submittingMethod}
-              />
-            </div>
-
-            {modalError && <p className="pp-modal-error">{modalError}</p>}
-
-            {showUpiWhatsappCta ? (
-              // Buyer already tapped a UPI app button and has returned to this
-              // tab — collapse the picker into a single confirmation step.
-              <button
-                type="button"
-                className="pp-modal-btn pp-modal-btn--upi"
-                onClick={() => goToWhatsApp("upi-confirm")}
-              >
-                Proceed to WhatsApp
-              </button>
-            ) : (
-              <>
-                <span className="pp-modal-section-label">Choose payment app</span>
-                <div className="pp-upi-apps-list">
-                  {upiApps.map((app) => (
-                    <button
-                      key={app.id}
-                      type="button"
-                      className="pp-upi-app-btn"
-                      onClick={() => submitPayment(app.id)}
-                      disabled={!!submittingMethod}
-                    >
-                      <span className="pp-upi-app-icon">
-                        <img
-                          src={app.icon}
-                          alt=""
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                        <span
-                          className="pp-upi-app-icon-fallback"
-                          style={{ display: "none", background: app.accent }}
-                        >
-                          {app.name.charAt(0)}
-                        </span>
-                      </span>
-                      <span className="pp-upi-app-name">
-                        {submittingMethod === app.id ? `Opening ${app.name}…` : app.name}
-                      </span>
-                      <span className="pp-upi-app-arrow">→</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pp-modal-divider"><span>or</span></div>
-
-                <button
-                  type="button"
-                  className="pp-modal-btn pp-modal-btn--bank"
-                  onClick={() => submitPayment("bank")}
-                  disabled={!!submittingMethod}
-                >
-                  {submittingMethod === "bank" ? "Redirecting…" : "Pay with Bank Transfer"}
-                </button>
-              </>
-            )}
-
-            <p className="pp-modal-note">
-              {showUpiWhatsappCta
-                ? "Tap \"Proceed to WhatsApp\" to confirm your payment and get your order delivered."
-                : "Choosing an app opens it directly with the amount pre-filled. Your details are used only to confirm and deliver this order."}
-            </p>
-          </div>
         </div>
       )}
 
