@@ -245,7 +245,7 @@ export const Footer = () => {
               </div>
               <div className="footer-contact-item">
                 <span className="footer-contact-label">Telegram</span>
-                <a href="https://t.me/aasarambapu" target="_blank" rel="noopener noreferrer" className="footer-contact-value">@dexterluxuries</a>
+                <a href="https://t.me/aasarambapu" target="_blank" rel="noopener noreferrer" className="footer-contact-value">@mkrtoolsandsoftwares</a>
               </div>
             </div>
           </div>

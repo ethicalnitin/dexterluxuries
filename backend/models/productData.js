@@ -17,6 +17,10 @@ const planSchema = new mongoose.Schema(
         strikeThroughPrice: {
             type: Number,
         },
+        available : {
+            type: Boolean,
+            default: true,
+        },
     },
     { _id: false } // set to true if you want each plan to have its own _id
 );

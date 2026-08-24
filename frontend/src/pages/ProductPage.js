@@ -4,7 +4,6 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Countdown from "react-countdown";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
 
 // ── Price formatting helper ───────────────────────────────────────────────────
 // Prices come from the backend in USD. We display the real value — no fake
@@ -22,6 +21,12 @@ function formatPlanDuration(plan) {
   if (plan.name) return plan.name;
   if (!plan.durationInMonths) return "Lifetime";
   return plan.durationInMonths === 1 ? "1 Month" : `${plan.durationInMonths} Months`;
+}
+
+// A plan is treated as in-stock unless it explicitly says otherwise —
+// matches the schema's `available: { default: true }`.
+function isPlanAvailable(plan) {
+  return plan?.available !== false;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -195,6 +200,14 @@ const style = `
     color: var(--cv-cyan); background: rgba(55,230,201,.1); border: 1px solid rgba(55,230,201,.25); padding: 4px 10px; border-radius: 6px;
   }
 
+  /* ---------- Out of stock ---------- */
+  .pp-outofstock-banner {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--cv-pink); background: rgba(255,99,176,.1); border: 1px solid rgba(255,99,176,.3);
+    padding: 10px 16px; border-radius: 9px;
+  }
+
   /* ---------- Plan selector ---------- */
   .pp-plans { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
   .pp-plan-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--cv-faint); font-weight: 600; margin-bottom: 4px; }
@@ -206,6 +219,8 @@ const style = `
   }
   .pp-plan-card:hover { border-color: var(--cv-border-strong); background: var(--cv-glass-hi); }
   .pp-plan-card--active { border-color: var(--cv-violet); background: rgba(139,92,246,.07); }
+  .pp-plan-card--soldout { opacity: .5; cursor: not-allowed; }
+  .pp-plan-card--soldout:hover { border-color: var(--cv-border); background: var(--cv-glass); }
   .pp-plan-radio { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--cv-border-strong); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
   .pp-plan-card--active .pp-plan-radio { border-color: var(--cv-violet); }
   .pp-plan-radio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cv-violet); transform: scale(0); transition: transform .15s; }
@@ -216,6 +231,7 @@ const style = `
     font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
     color: var(--cv-ink); background: var(--cv-aurora); padding: 3px 8px; border-radius: 5px; flex-shrink: 0;
   }
+  .pp-plan-badge--soldout { background: var(--cv-pink); color: #fff; }
   .pp-plan-price-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
   .pp-plan-price { font-family: 'JetBrains Mono', monospace; font-size: 14.5px; font-weight: 600; color: var(--cv-text); }
   .pp-plan-price-strike { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cv-faint); text-decoration: line-through; font-weight: 400; }
@@ -230,7 +246,7 @@ const style = `
   }
   .pp-buy-btn:hover { transform: translateY(-1px); background-position: 100% center; box-shadow: 0 14px 32px rgba(139,92,246,.3); }
   .pp-buy-btn:active { transform: translateY(0); }
-  .pp-buy-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+  .pp-buy-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; background: var(--cv-ink-3); color: var(--cv-muted); }
   .pp-btn-arrow { font-size: 16px; transition: transform .2s; }
   .pp-buy-btn:hover .pp-btn-arrow { transform: translateX(3px); }
 
@@ -398,6 +414,47 @@ const style = `
   .pp-reviews .slick-dots li button:before { color: var(--cv-violet) !important; opacity: .3; font-size: 8px; }
   .pp-reviews .slick-dots li.slick-active button:before { opacity: 1; color: var(--cv-cyan) !important; }
 
+  /* ---------- Email capture modal ---------- */
+  .pp-email-modal-overlay {
+    position: fixed; inset: 0; z-index: 2500; background: rgba(7,7,15,.75); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .pp-email-modal {
+    width: 100%; max-width: 400px; background: var(--cv-ink-2); border: 1px solid var(--cv-border-strong);
+    border-radius: 16px; padding: 32px 28px; position: relative;
+  }
+  .pp-email-modal-close {
+    position: absolute; top: 16px; right: 16px; background: var(--cv-glass); border: 1px solid var(--cv-border);
+    width: 30px; height: 30px; border-radius: 50%; color: var(--cv-text); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 14px; transition: background .15s;
+  }
+  .pp-email-modal-close:hover { background: var(--cv-glass-hi); }
+  .pp-email-modal-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; color: var(--cv-text); }
+  .pp-email-modal-sub { font-size: 13.5px; color: var(--cv-muted); margin-bottom: 22px; line-height: 1.6; }
+  .pp-email-modal-input {
+    width: 100%; background: var(--cv-ink-3); border: 1px solid var(--cv-border); border-radius: 10px;
+    padding: 13px 16px; color: var(--cv-text); font-size: 14px; font-family: 'Inter', sans-serif; margin-bottom: 6px;
+  }
+  .pp-email-modal-input:focus { outline: none; border-color: var(--cv-violet); }
+  .pp-email-modal-error { font-size: 12.5px; color: var(--cv-pink); margin: 4px 0 8px; }
+  .pp-email-modal-submit {
+    width: 100%; background: var(--cv-aurora); color: var(--cv-ink); font-weight: 700; font-size: 14.5px;
+    padding: 14px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; font-family: 'Inter', sans-serif;
+    transition: transform .15s ease;
+  }
+  .pp-email-modal-submit:hover { transform: translateY(-1px); }
+
+  /* ---------- Confetti ---------- */
+  .pp-confetti-container { position: fixed; inset: 0; z-index: 3000; pointer-events: none; overflow: hidden; }
+  .pp-confetti-piece {
+    position: absolute; top: -20px; border-radius: 2px;
+    animation-name: confettiFall; animation-timing-function: ease-in; animation-fill-mode: forwards; opacity: .95;
+  }
+  @keyframes confettiFall {
+    0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--drift), 110vh) rotate(540deg); opacity: 0; }
+  }
+
   @media (max-width: 900px) {
     .pp-shell-grid { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px 64px; }
     .pp-image-col { position: static; }
@@ -417,6 +474,7 @@ const style = `
     .pp-sticky-buybar { padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); gap: 10px; }
     .pp-sticky-timer { padding: 7px 9px; }
     .pp-sticky-timer-value { font-size: 12px; }
+    .pp-email-modal { padding: 28px 22px; }
   }
 `;
 
@@ -430,7 +488,7 @@ const reviews = [
 // Purchase process — same 4 steps for every product on the store.
 const purchaseSteps = [
   { title: "Choose your plan", desc: "Pick the duration or tier that fits you on this page." },
-  { title: "Click Buy Now", desc: "You're redirected to our secure, encrypted payment page." },
+  { title: "Enter your email", desc: "Just your email — that's all we need to send access." },
   { title: "Complete payment", desc: "Pay via UPI, card, or netbanking — whatever's easiest for you." },
   { title: "Instant delivery", desc: "Access details land in your email / Telegram within minutes." },
 ];
@@ -461,6 +519,9 @@ const trustItems = [
  */
 const dummyProofImages = [
 { "id": 1, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469334/proofs/fmvjx8nf4m0qkytv1tm9.jpg", "label": "4965327411218590780.jpg" },
+  { "id": 150, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469668/proofs/awdtfsw09onj47wtrw4s.jpg", "label": "IMG_20240921_015225_765.jpg" },
+  { "id": 151, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469671/proofs/r8yjb9r8vsjf1qqpk0kx.jpg", "label": "IMG_20240921_015227_341.jpg" },
+  { "id": 152, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg", "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg" },
   { "id": 2, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469340/proofs/lapgci9ggunou3ooyo4b.jpg", "label": "4965327411218590781.jpg" },
   { "id": 3, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469344/proofs/dljlnvnndba4h3kp8j97.jpg", "label": "5010499051149437833.jpg" },
   { "id": 4, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469348/proofs/edowg2cntli4p13akpdh.jpg", "label": "5010499051149437834.jpg" },
@@ -609,16 +670,14 @@ const dummyProofImages = [
   { "id": 147, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469661/proofs/gpmfkh8pppuqopl3wmgx.jpg", "label": "IMG_20240921_015217_651.jpg" },
   { "id": 148, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469664/proofs/xwjg7jqrptbsxekeou1r.jpg", "label": "IMG_20240921_015218_449.jpg" },
   { "id": 149, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469666/proofs/muxt6qmqofezvfkqifls.jpg", "label": "IMG_20240921_015219_844.jpg" },
-  { "id": 150, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469668/proofs/awdtfsw09onj47wtrw4s.jpg", "label": "IMG_20240921_015225_765.jpg" },
-  { "id": 151, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469671/proofs/r8yjb9r8vsjf1qqpk0kx.jpg", "label": "IMG_20240921_015227_341.jpg" },
-  { "id": 152, "url": "https://res.cloudinary.com/rblaguvf/image/upload/v1783469673/proofs/p9fcchhgnqdszjvv5zfd.jpg", "label": "Screenshot_2024-09-21-01-49-35-18_948cd9899890cbd5c2798760b2b95377.jpg" }
+  
 ];
 
 // Kept below the dummy set's length on purpose — with only 12 dummy items and
 // a preview count of 12, `proofImages.length > PROOFS_PREVIEW_COUNT` was
 // always false, so the "show more" button never rendered. 8 leaves headroom
 // for both the dummy set and real per-product data from the backend.
-const PROOFS_PREVIEW_COUNT = 8;
+const PROOFS_PREVIEW_COUNT = 5;
 
 const USD_TO_INR_RATE = 99;
 
@@ -628,10 +687,52 @@ function convertUsdToInr(usdAmount) {
   return Math.round(n * USD_TO_INR_RATE);
 }
 
+// Fires a lightweight, dependency-free confetti burst from the top of the
+// viewport. Particles are plain <span> elements animated with the
+// `confettiFall` keyframes defined above, and remove themselves once the
+// animation finishes.
+function fireConfetti() {
+  const colors = ["#8B5CF6", "#FF63B0", "#37E6C9", "#F6F7FB"];
+  const count = 70;
+
+  const container = document.createElement("div");
+  container.className = "pp-confetti-container";
+  document.body.appendChild(container);
+
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    piece.className = "pp-confetti-piece";
+
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const left = Math.random() * 100;
+    const duration = 2.2 + Math.random() * 1.6;
+    const delay = Math.random() * 0.35;
+    const width = 6 + Math.random() * 6;
+    const height = width * (0.35 + Math.random() * 0.3);
+    const rotate = Math.random() * 360;
+    const drift = (Math.random() - 0.5) * 180;
+
+    piece.style.left = `${left}vw`;
+    piece.style.background = color;
+    piece.style.width = `${width}px`;
+    piece.style.height = `${height}px`;
+    piece.style.animationDuration = `${duration}s`;
+    piece.style.animationDelay = `${delay}s`;
+    piece.style.transform = `rotate(${rotate}deg)`;
+    piece.style.setProperty("--drift", `${drift}px`);
+
+    container.appendChild(piece);
+  }
+
+  setTimeout(() => {
+    container.remove();
+  }, 4200);
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ProductPage = () => {
   const navigate = useNavigate();
-  const { requireAuth } = useAuth();
 
   const [product,   setProduct]   = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -647,6 +748,12 @@ const ProductPage = () => {
 
   const [showStickyBar, setShowStickyBar] = useState(false);
 
+  // Email-only checkout: no OTP, no login — just collect an email right
+  // before handing off to the payment page.
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailError, setEmailError] = useState("");
+
   // Countdown target: midnight tonight (00:00 the next calendar day), computed
   // once via the lazy initializer so it stays fixed for the whole session
   // instead of drifting on every render/refresh. Same target for everyone on
@@ -659,6 +766,7 @@ const ProductPage = () => {
   const { id } = useParams();
   const buyBtnAnchorRef = useRef(null);
   const proofsSectionRef = useRef(null);
+  const emailInputRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -691,9 +799,12 @@ const ProductPage = () => {
     fetchProduct();
   }, [id]);
 
-  // Reset to the first plan whenever a (new) product loads.
+  // Reset plan selection whenever a (new) product loads — default to the
+  // first in-stock plan so shoppers don't land on a sold-out option.
   useEffect(() => {
-    setSelectedPlanIndex(0);
+    if (!product?.plans) return;
+    const firstAvailableIdx = product.plans.findIndex(isPlanAvailable);
+    setSelectedPlanIndex(firstAvailableIdx !== -1 ? firstAvailableIdx : 0);
   }, [product]);
 
   // Show a sticky Buy Now bar once the main buy button scrolls out of view,
@@ -710,26 +821,56 @@ const ProductPage = () => {
     return () => observer.disconnect();
   }, [product, isLoading]);
 
+  // Focus the email field as soon as the modal opens.
+  useEffect(() => {
+    if (showEmailModal) {
+      setEmailInput("");
+      setEmailError("");
+      setTimeout(() => emailInputRef.current?.focus(), 50);
+    }
+  }, [showEmailModal]);
+
   // ── Buy Now handler ───────────────────────────────────────────────────
-  // Payment has been stripped out entirely — wire up your new payment flow
-  // (redirect to a checkout page, open your own modal, call your gateway's
-  // SDK, etc.) inside this function. `plan` is the selected sub-document
-  // from product.plans, so it carries name/durationInMonths/price/
-  // strikeThroughPrice for whatever checkout payload you build.
+  // No OTP, no login gate — clicking Buy Now just opens a small modal
+  // asking for an email address, then hands off to the payment page.
   const handleBuyNowClick = () => {
     const plan = product?.plans?.[selectedPlanIndex];
     if (!product || !plan || typeof plan.price === "undefined") {
       alert("Error: Could not retrieve plan pricing. Please try again in a moment.");
       return;
     }
+    if (!isPlanAvailable(plan)) {
+      return; // button is disabled in this state, this is just a guard
+    }
+    setShowEmailModal(true);
+  };
 
-    const amountInINR = convertUsdToInr(plan.price);
-    if (amountInINR === null) {
-      alert("Error: Could not calculate the payment amount. Please try again.");
+  // ── Email submit handler ──────────────────────────────────────────────
+  // Validates the email, fires the confetti burst, then redirects to the
+  // payment page with the plan + email in the route state. Wire up your
+  // payment flow (checkout page, modal, gateway SDK, etc.) using this data
+  // — `plan` carries name/durationInMonths/price/strikeThroughPrice.
+  const handleEmailSubmit = (e) => {
+    e.preventDefault();
+
+    const trimmedEmail = emailInput.trim();
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setEmailError("Please enter a valid email address.");
       return;
     }
 
-    requireAuth(() => {
+    const plan = product.plans[selectedPlanIndex];
+    const amountInINR = convertUsdToInr(plan.price);
+    if (amountInINR === null) {
+      setEmailError("Could not calculate the payment amount. Please try again.");
+      return;
+    }
+
+    fireConfetti();
+    setShowEmailModal(false);
+
+    // Small delay so the confetti burst is visible before navigating away.
+    setTimeout(() => {
       navigate("/payment", {
         state: {
           productId: product.id ?? product._id,
@@ -737,9 +878,10 @@ const ProductPage = () => {
           planName: formatPlanDuration(plan),
           amount: amountInINR,       // rupees — what PaymentPage.js's UPI flow expects
           amountUSD: plan.price,     // kept too, in case you want it for crypto display later
+          email: trimmedEmail,
         },
       });
-    });
+    }, 650);
   };
 
   // Compact renderer used for the countdown chip inside the sticky Buy Now
@@ -809,6 +951,7 @@ const ProductPage = () => {
   const plans = product.plans; // guaranteed non-empty by the fetch check above
   const isMultiPlan = plans.length > 1;
   const selectedPlan = plans[selectedPlanIndex] || plans[0];
+  const isSelectedPlanAvailable = isPlanAvailable(selectedPlan);
 
   const displayPrice  = formatUSD(selectedPlan.price);
   const hasSelectedPlanStrike = Boolean(selectedPlan.strikeThroughPrice) && Number(selectedPlan.strikeThroughPrice) > Number(selectedPlan.price);
@@ -900,13 +1043,20 @@ const ProductPage = () => {
               />
             </div>
 
-            {/* Single-plan products show one price up top. Multi-plan
-                products show price per-card in the plan list instead. */}
+            {/* Single-plan products show one price up top (or an out-of-stock
+                banner if that plan isn't available). Multi-plan products show
+                price per-card in the plan list instead. */}
             {!isMultiPlan && (
               <div className="pp-pricing">
-                <span className="pp-price-current">{displayPrice}</span>
-                {displayStrike && <span className="pp-price-strike">{displayStrike}</span>}
-                {discount ? <span className="pp-price-save">Save {discount}%</span> : null}
+                {isSelectedPlanAvailable ? (
+                  <>
+                    <span className="pp-price-current">{displayPrice}</span>
+                    {displayStrike && <span className="pp-price-strike">{displayStrike}</span>}
+                    {discount ? <span className="pp-price-save">Save {discount}%</span> : null}
+                  </>
+                ) : (
+                  <span className="pp-outofstock-banner">Out of stock</span>
+                )}
               </div>
             )}
 
@@ -918,20 +1068,24 @@ const ProductPage = () => {
                   <span className="pp-plan-label">Choose your plan</span>
                   {plans.map((plan, idx) => {
                     const isActive = selectedPlanIndex === idx;
+                    const planAvailable = isPlanAvailable(plan);
                     const hasStrike = Boolean(plan.strikeThroughPrice) && Number(plan.strikeThroughPrice) > Number(plan.price);
                     return (
                       <button
                         key={`${plan.name}-${idx}`}
                         type="button"
-                        className={`pp-plan-card ${isActive ? "pp-plan-card--active" : ""}`}
-                        onClick={() => setSelectedPlanIndex(idx)}
+                        className={`pp-plan-card ${isActive ? "pp-plan-card--active" : ""} ${!planAvailable ? "pp-plan-card--soldout" : ""}`}
+                        onClick={() => planAvailable && setSelectedPlanIndex(idx)}
+                        disabled={!planAvailable}
                       >
                         <span className="pp-plan-main">
                           <span className="pp-plan-radio"><span className="pp-plan-radio-dot" /></span>
                           <span className="pp-plan-duration">{formatPlanDuration(plan)}</span>
-                          {idx === plans.length - 1 && (
+                          {!planAvailable ? (
+                            <span className="pp-plan-badge pp-plan-badge--soldout">Out of stock</span>
+                          ) : idx === plans.length - 1 ? (
                             <span className="pp-plan-badge">Best value</span>
-                          )}
+                          ) : null}
                         </span>
                         <span className="pp-plan-price-col">
                           {hasStrike && (
@@ -945,8 +1099,12 @@ const ProductPage = () => {
                 </div>
               )}
 
-              <button className="pp-buy-btn" onClick={handleBuyNowClick}>
-                Buy now — {displayPrice} <span className="pp-btn-arrow">→</span>
+              <button className="pp-buy-btn" onClick={handleBuyNowClick} disabled={!isSelectedPlanAvailable}>
+                {isSelectedPlanAvailable ? (
+                  <>Buy now — {displayPrice} <span className="pp-btn-arrow">→</span></>
+                ) : (
+                  "Out of stock"
+                )}
               </button>
             </div>
 
@@ -957,7 +1115,7 @@ const ProductPage = () => {
             </div>
 
             <p className="pp-cta-note">
-              You'll be redirected to our secure payment page. Instant delivery after payment.
+              Just enter your email to continue — no account or verification needed. Instant delivery after payment.
             </p>
 
             <div className="pp-description">
@@ -1085,16 +1243,57 @@ const ProductPage = () => {
               {product.name}{isMultiPlan ? ` — ${formatPlanDuration(selectedPlan)}` : ""}
             </span>
             <span className="pp-sticky-price">
-              {stickyStrikeDisplay && (
-                <span className="pp-sticky-price-strike">{stickyStrikeDisplay}</span>
+              {isSelectedPlanAvailable ? (
+                <>
+                  {stickyStrikeDisplay && (
+                    <span className="pp-sticky-price-strike">{stickyStrikeDisplay}</span>
+                  )}
+                  {stickyPriceDisplay}
+                </>
+              ) : (
+                "Out of stock"
               )}
-              {stickyPriceDisplay}
             </span>
           </div>
           <Countdown date={countdownEnd} renderer={renderStickyCountdown} />
-          <button className="pp-sticky-buy-btn" onClick={handleBuyNowClick}>
-            Buy now <span className="pp-btn-arrow">→</span>
+          <button className="pp-sticky-buy-btn" onClick={handleBuyNowClick} disabled={!isSelectedPlanAvailable}>
+            {isSelectedPlanAvailable ? <>Buy now <span className="pp-btn-arrow">→</span></> : "Sold out"}
           </button>
+        </div>
+      )}
+
+      {/* ---------- Email capture modal (replaces the old OTP flow) ---------- */}
+      {showEmailModal && (
+        <div className="pp-email-modal-overlay" onClick={() => setShowEmailModal(false)}>
+          <div className="pp-email-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="pp-email-modal-close"
+              onClick={() => setShowEmailModal(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <h3 className="pp-email-modal-title">Where should we send access?</h3>
+            <p className="pp-email-modal-sub">
+              Enter your email to continue to payment. No account, no verification code — just this.
+            </p>
+            <form onSubmit={handleEmailSubmit}>
+              <input
+                ref={emailInputRef}
+                type="email"
+                className="pp-email-modal-input"
+                placeholder="you@example.com"
+                value={emailInput}
+                onChange={(e) => { setEmailInput(e.target.value); if (emailError) setEmailError(""); }}
+                autoComplete="email"
+              />
+              {emailError && <p className="pp-email-modal-error">{emailError}</p>}
+              <button type="submit" className="pp-email-modal-submit">
+                Continue to payment — {displayPrice}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
