@@ -9,6 +9,12 @@ const UPI_ID = "paytm.s2znhpg@pty";
 const PAYEE_NAME = "MKR Tools & Softwares";
 const QR_IMAGE_URL = "https://i.ibb.co/cSFGRFqY/image.png";
 
+// UPI is temporarily unavailable — our bank's UPI servers are down on their
+// end, so we can't reliably receive payments through UPI right now. Flip
+// this back to true once the bank confirms service is restored.
+const UPI_AVAILABLE = false;
+const UPI_UNAVAILABLE_REASON = "Bank servers down";
+
 // ── Crypto config ────────────────────────────────────────────────────────
 // TODO: replace with your real BEP20 wallet address before going live.
 const CRYPTO_WALLET_ADDRESS = "0xEA56A38CB9Ddfe0F49D2d90fC4afA5A204Dc5ac8";
@@ -28,12 +34,12 @@ const API_BASE = "";
 // rejected by the backend when "Payment completed" / "I've paid" is clicked.
 // Keep +91 as default until the backend regex is updated to support others.
 const COUNTRY_CODES = [
-  { dial: "+91", label: "IN +91" },
-  { dial: "+1", label: "US +1" },
-  { dial: "+44", label: "UK +44" },
-  { dial: "+971", label: "AE +971" },
-  { dial: "+61", label: "AU +61" },
-  { dial: "+65", label: "SG +65" },
+  { dial: "+91", label: "IN +91", flag: "🇮🇳" },
+  { dial: "+1", label: "US +1", flag: "🇺🇸" },
+  { dial: "+44", label: "UK +44", flag: "🇬🇧" },
+  { dial: "+971", label: "AE +971", flag: "🇦🇪" },
+  { dial: "+61", label: "AU +61", flag: "🇦🇺" },
+  { dial: "+65", label: "SG +65", flag: "🇸🇬" },
 ];
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -128,6 +134,7 @@ export default function PaymentPage() {
   const buyerEmail = orderData?.email || "";
 
   const phoneEntered = isPhoneLongEnough(phone);
+  const selectedCountry = COUNTRY_CODES.find((c) => c.dial === countryDial) || COUNTRY_CODES[0];
 
   // ── Which currency the order summary shows, driven by phase + choices ──
   // review:   hidden until a phone number is entered, then USD
@@ -230,6 +237,7 @@ export default function PaymentPage() {
   }
 
   function chooseMethod(method) {
+    if (method === "UPI" && !UPI_AVAILABLE) return;
     setSelectedMethod(method);
     setPhase(method === "UPI" ? "upi" : "crypto");
   }
@@ -369,7 +377,8 @@ export default function PaymentPage() {
 
     .phone-row { display: flex; gap: 8px; }
     .phone-country {
-      flex: 0 0 108px; padding: 11px 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+      flex: 0 0 118px; display: flex; align-items: center; gap: 6px; padding: 11px 10px;
+      background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
       color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; cursor: pointer; transition: border-color .15s;
     }
     .phone-country:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -418,18 +427,31 @@ export default function PaymentPage() {
       display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
       background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 14px 16px;
       cursor: pointer; transition: border-color .15s, background .15s; color: var(--text); font-family: 'Inter', sans-serif;
+      position: relative;
     }
     .method-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .method-card--disabled { cursor: not-allowed; opacity: .6; background: var(--surface-2); }
+    .method-card--disabled:hover { border-color: var(--border-strong); background: var(--surface-2); }
     .method-icon {
       width: 38px; height: 38px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent);
     }
+    .method-card--disabled .method-icon { color: var(--text-faint); }
     .method-icon svg { width: 18px; height: 18px; }
     .method-text { flex: 1; min-width: 0; }
-    .method-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .method-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
+    .method-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
     .method-sub { font-size: 11.5px; color: var(--text-dim); }
     .method-arrow { color: var(--text-faint); flex-shrink: 0; }
     .method-arrow svg { width: 15px; height: 15px; }
+
+    .tag {
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px;
+      font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+      white-space: nowrap;
+    }
+    .tag--danger { background: var(--danger-soft); color: var(--danger); }
+    .tag svg { width: 9px; height: 9px; }
 
     .timer { margin-bottom: 18px; }
     .timer-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
@@ -476,6 +498,14 @@ export default function PaymentPage() {
     .status-note { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: 'Inter', sans-serif; font-size: 12px; }
     .status-note--danger { color: var(--danger); }
     .status-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+    .notice-banner {
+      display: flex; align-items: flex-start; gap: 9px; background: var(--danger-soft); border: 1px solid #FECACA;
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font-family: 'Inter', sans-serif; font-size: 12.5px;
+      color: #991B1B; line-height: 1.5;
+    }
+    .notice-banner svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--danger); }
+    .notice-banner b { color: #7F1D1D; }
 
     .chain-badge {
       display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft);
@@ -539,7 +569,7 @@ export default function PaymentPage() {
       .app-btn-row { flex-direction: column; }
       .main { padding: 20px; }
       .order-summary { padding: 16px 20px; }
-      .phone-country { flex-basis: 92px; }
+      .phone-country { flex-basis: 100px; }
     }
   `;
 
@@ -649,7 +679,7 @@ export default function PaymentPage() {
                         aria-label="Country code"
                       >
                         {COUNTRY_CODES.map((c) => (
-                          <option key={c.dial} value={c.dial}>{c.label}</option>
+                          <option key={c.dial} value={c.dial}>{`${c.flag} ${c.label}`}</option>
                         ))}
                       </select>
                       <input
@@ -662,7 +692,7 @@ export default function PaymentPage() {
                         autoComplete="tel-national"
                       />
                     </div>
-                  
+
                   </div>
 
                   <button className="btn-primary" type="submit" disabled={!phoneEntered}>
@@ -686,14 +716,37 @@ export default function PaymentPage() {
                   <div className="form-sub">UPI shows the price in rupees. Crypto shows the price in USDT.</div>
                 </div>
 
+                {!UPI_AVAILABLE && (
+                  <div className="notice-banner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                    <span><b>UPI is temporarily unavailable</b> — our bank's UPI servers are currently down, so we can't reliably receive payments this way. Please use Crypto (USDT) below, or message us on WhatsApp.</span>
+                  </div>
+                )}
+
                 <div className="method-grid">
-                  <button className="method-card" onClick={() => chooseMethod("UPI")} type="button">
+                  <button
+                    className={`method-card ${!UPI_AVAILABLE ? "method-card--disabled" : ""}`}
+                    onClick={() => chooseMethod("UPI")}
+                    type="button"
+                    disabled={!UPI_AVAILABLE}
+                    aria-disabled={!UPI_AVAILABLE}
+                  >
                     <span className="method-icon">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></svg>
                     </span>
                     <span className="method-text">
-                      <div className="method-title">UPI</div>
-                      <div className="method-sub">GPay, PhonePe, Paytm or any UPI app — price in ₹</div>
+                      <span className="method-title-row">
+                        <span className="method-title">UPI</span>
+                        {!UPI_AVAILABLE && (
+                          <span className="tag tag--danger">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                            {UPI_UNAVAILABLE_REASON}
+                          </span>
+                        )}
+                      </span>
+                      <div className="method-sub">
+                        {UPI_AVAILABLE ? "GPay, PhonePe, Paytm or any UPI app — price in ₹" : "Currently unavailable — please use Crypto instead"}
+                      </div>
                     </span>
                     <span className="method-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M9 6l6 6-6 6" /></svg></span>
                   </button>
@@ -713,7 +766,7 @@ export default function PaymentPage() {
             )}
 
             {/* ================= STEP 2b: UPI PAY ================= */}
-            {phase === "upi" && (
+            {phase === "upi" && UPI_AVAILABLE && (
               <>
                 <button className="back-link" onClick={() => setPhase("method")} type="button">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
