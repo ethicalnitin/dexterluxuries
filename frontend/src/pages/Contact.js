@@ -288,7 +288,7 @@ const channels = [
     label: "Telegram",
     value: "@cybermafia.shop",
     desc: "Join our channel for deals & updates",
-    href: "https://t.me/dexterluxuries",
+    href: "https://t.me/mkrtoolsandsoftwares",
   },
   {
     icon: "📸",
