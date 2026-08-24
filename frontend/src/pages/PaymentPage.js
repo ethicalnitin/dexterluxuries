@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
 
 const WHATSAPP_NUMBER = "+12403013547";
 const BRAND_NAME = "MKR Tools & Softwares";
@@ -20,7 +19,7 @@ const PAYMENT_WINDOW_SECONDS = 10 * 60; // 10 minutes, starts once they reach th
 // Backend base URL. Leave empty when Express serves the React build itself
 // (same-origin). Set to the backend's full origin if frontend/backend are
 // ever split across two hosts.
-const API_BASE = "http://localhost:3046";
+const API_BASE = "";
 
 // ── Country codes for the phone field ─────────────────────────────────────
 // NOTE: server.js's /api/orders/notify only validates India-format numbers
@@ -75,9 +74,11 @@ function isPhoneLongEnough(value) {
 export default function PaymentPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, token, isReady, isAuthenticated } = useAuth();
 
-  // Data passed from ProductPage.js via navigate("/payment", { state: {...} })
+  // Data passed from ProductPage.js via navigate("/payment", { state: {...} }).
+  // This now includes `email`, collected in the email-capture modal on the
+  // product page — there's no login/OTP step anymore, so this is the only
+  // source of truth for who's checking out.
   const orderData = location.state || null;
 
   const [orderRef] = useState(makeOrderRef);
@@ -99,13 +100,16 @@ export default function PaymentPage() {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
 
-  // ── Guards ───────────────────────────────────────────────────────────
+  // ── Guard ────────────────────────────────────────────────────────────
+  // No more auth/OTP gate here — this page only needs order data to have
+  // actually arrived via navigate() from the product page. If someone lands
+  // here directly (refresh, bookmark, back button after clearing state),
+  // there's nothing to check out, so send them home.
   useEffect(() => {
-    if (!isReady) return;
-    if (!isAuthenticated || !orderData) {
+    if (!orderData) {
       navigate("/", { replace: true });
     }
-  }, [isReady, isAuthenticated, orderData, navigate]);
+  }, [orderData, navigate]);
 
   // ── Scroll fixes ─────────────────────────────────────────────────────
   useLayoutEffect(() => {
@@ -121,6 +125,7 @@ export default function PaymentPage() {
   const displayAmountUSD = orderData?.amountUSD != null ? formatUSD(orderData.amountUSD) : null; // USD
   const productName = orderData?.productName || "Product";
   const planName = orderData?.planName || null;
+  const buyerEmail = orderData?.email || "";
 
   const phoneEntered = isPhoneLongEnough(phone);
 
@@ -204,14 +209,14 @@ export default function PaymentPage() {
         planName ? `Plan: ${planName}` : null,
         amountLine,
         `Order ref: ${orderRef}`,
-        user?.email ? `Account: ${user.email}` : null,
+        buyerEmail ? `Account: ${buyerEmail}` : null,
         extraLine || null,
       ]
         .filter((l) => l !== null)
         .join("\n");
       window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines)}`, "_blank");
     },
-    [productName, planName, displayAmount, displayAmountUSD, selectedMethod, orderRef, user]
+    [productName, planName, displayAmount, displayAmountUSD, selectedMethod, orderRef, buyerEmail]
   );
 
   function handleReviewContinue(e) {
@@ -238,13 +243,12 @@ export default function PaymentPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           productId: orderData?.productId,
           productName,
           amount: method === "UPI" ? orderData?.amount : orderData?.amountUSD,
-          email: user?.email,
+          email: buyerEmail,
           phone: fullPhone,
           method,
         }),
@@ -539,7 +543,7 @@ export default function PaymentPage() {
     }
   `;
 
-  if (!isReady || !isAuthenticated || !orderData) {
+  if (!orderData) {
     return (
       <div className="page">
         <style>{css}</style>
@@ -631,8 +635,8 @@ export default function PaymentPage() {
                   )}
 
                   <div className="form-group">
-                    <label className="form-label">Signed in as</label>
-                    <input className="form-input" type="text" value={user?.email || ""} disabled />
+                    <label className="form-label">Email</label>
+                    <input className="form-input" type="text" value={buyerEmail} disabled />
                   </div>
 
                   <div className="form-group">
