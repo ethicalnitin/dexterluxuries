@@ -1009,7 +1009,7 @@ const HomePage = () => {
   const heroStack = useTilt(10);
 
   useEffect(() => {
-    fetch("https://chartvault.shop/api/products")
+    fetch("https://dexterluxuries-production.up.railway.app/api/products")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error ${res.status}`);
