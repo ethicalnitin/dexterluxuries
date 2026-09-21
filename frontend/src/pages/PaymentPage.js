@@ -134,7 +134,6 @@ export default function PaymentPage() {
   const buyerEmail = orderData?.email || "";
 
   const phoneEntered = isPhoneLongEnough(phone);
-  const selectedCountry = COUNTRY_CODES.find((c) => c.dial === countryDial) || COUNTRY_CODES[0];
 
   // ── Which currency the order summary shows, driven by phase + choices ──
   // review:   hidden until a phone number is entered, then USD
