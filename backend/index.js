@@ -10,7 +10,6 @@ const FormData = require('form-data');
 const fetch = require('node-fetch'); // npm install node-fetch@2
 const productRoutes = require('./routes/productRoutes');
 const authRoutes = require('./routes/authRoutes');
-const { requireAuth } = require('./middleware/auth');
 
 const app = express();
 
@@ -220,7 +219,8 @@ app.use('/api/auth', authRoutes);
 
 // POST /api/orders/notify — order intent (contact details + chosen payment
 // method) sent from the payment modal on ProductPage.js, BEFORE the buyer pays.
-app.post('/api/orders/notify', requireAuth, async (req, res) => {
+// Public: no session required.
+app.post('/api/orders/notify', async (req, res) => {
   const { productId, productName, amount, email, phone, method } = req.body || {};
 
   if (!email || String(email).trim().length < 3) {
@@ -240,7 +240,6 @@ app.post('/api/orders/notify', requireAuth, async (req, res) => {
     const captionLines = [
       `🛒 <b>New Order Started</b>`,
       ``,
-      `🔐 <b>Signed in as:</b> ${escapeHtml(req.user.email)}`,
       productId ? `🆔 <b>Product ID:</b> <code>${escapeHtml(String(productId).trim())}</code>` : null,
       productName ? `📦 <b>Product:</b> ${escapeHtml(String(productName).trim())}` : null,
       `💵 <b>Amount:</b> ₹${amountNum.toLocaleString('en-IN')}`,
@@ -264,12 +263,7 @@ app.post('/api/orders/notify', requireAuth, async (req, res) => {
 
 // POST /api/orders/confirm — called when the buyer taps "I've paid" on
 // PaymentPage.js. Validates the 12-digit UTR, stores it, and sends it to Telegram.
-//
-// NOTE: this now requires a session, matching /notify and /deposit. Previously
-// it was open to the internet, so anyone could write rows into the UTR
-// collection and spam the Telegram channel. If your flow genuinely needs it
-// public, remove `requireAuth` below — but then also drop the req.user line
-// from the message body further down.
+// Public: no session required.
 app.post('/api/orders/confirm', confirmRateLimit, async (req, res) => {
   const { productId, productName, planName, amount, email, orderRef, utr, method } = req.body || {};
 
@@ -314,7 +308,6 @@ app.post('/api/orders/confirm', confirmRateLimit, async (req, res) => {
     const lines = [
       `💰 <b>Payment Submitted — verify in bank app</b>`,
       ``,
-      `🔐 <b>Signed in as:</b> ${escapeHtml(req.user.email)}`,
       `🎫 <b>Order Ref:</b> <code>${escapeHtml(orderRefClean)}</code>`,
       `🔑 <b>UTR:</b> <code>${escapeHtml(utrClean)}</code>`,
       `💵 <b>Amount:</b> ₹${amountNum.toLocaleString('en-IN')}`,
@@ -338,7 +331,8 @@ app.post('/api/orders/confirm', confirmRateLimit, async (req, res) => {
 // POST /api/deposit — receive UTR + email/username + screenshot, forward to Telegram.
 // This is the LATER step — after the buyer has actually paid — used by the
 // bank-transfer payment page.
-app.post('/api/deposit', requireAuth, upload.single('screenshot'), async (req, res) => {
+// Public: no session required.
+app.post('/api/deposit', upload.single('screenshot'), async (req, res) => {
   const { utr, email, amount, method, productName, orderRef } = req.body || {};
   const screenshotFile = req.file;
   const screenshotPath = screenshotFile ? screenshotFile.path : null;
@@ -365,7 +359,6 @@ app.post('/api/deposit', requireAuth, upload.single('screenshot'), async (req, r
     const captionLines = [
       `💰 <b>New Deposit Submission</b>`,
       ``,
-      `🔐 <b>Signed in as:</b> ${escapeHtml(req.user.email)}`,
       orderRef ? `🎫 <b>Order Ref:</b> <code>${escapeHtml(String(orderRef).trim())}</code>` : null,
       productName ? `📦 <b>Product:</b> ${escapeHtml(String(productName).trim())}` : null,
       `👤 <b>Email/Username:</b> ${escapeHtml(String(email).trim())}`,
