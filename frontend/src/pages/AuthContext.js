@@ -29,7 +29,7 @@ import LoginModal from "./LoginModal";
    endpoints must include the token:
 
      const { token } = useAuth();
-     fetch("https://chartvault.shoplocalhost:3046/api/orders/notify", {
+     fetch("https://dexterluxuries-production.up.railway.applocalhost:3046/api/orders/notify", {
        method: "POST",
        headers: {
          "Content-Type": "application/json",
