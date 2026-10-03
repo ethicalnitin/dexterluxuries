@@ -5,9 +5,9 @@ const WHATSAPP_NUMBER = "+12403013547";
 const BRAND_NAME = "MKR Tools & Softwares";
 
 // ── UPI config ───────────────────────────────────────────────────────────
-const UPI_ID = "paytm.s2znhpg@pty";
+const UPI_ID = "9251033152@mairtel";
 const PAYEE_NAME = "MKR Tools & Softwares";
-const QR_IMAGE_URL = "https://i.ibb.co/cSFGRFqY/image.png";
+const QR_IMAGE_URL = "https://i.ibb.co/W4chwP53/image.png";
 
 // Flip to false if the bank's UPI servers go down again.
 const UPI_AVAILABLE = true;
