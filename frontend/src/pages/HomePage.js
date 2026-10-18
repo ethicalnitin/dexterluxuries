@@ -672,10 +672,6 @@ const faqItems = [
   },
 ];
 
-/* ============================================================
-   HELPERS — unchanged business logic, plus small additions
-   for category grouping and weekly-hit selection
-============================================================ */
 
 const formatUSD = (amount) => {
   if (amount === null || amount === undefined || amount === "") return null;
@@ -709,23 +705,14 @@ const getDisplayPrice = (plan) => {
   };
 };
 
-// ------------------------------------------------------------------
-// HIT PRODUCTS OF THE WEEK — set this list by hand, frontend only.
-// Paste in the exact `id` of each product (check the product's URL or
-// your admin panel), in the order you want them ranked: [rank 1, rank 2, rank 3].
-// Nothing here is pulled from the API — if a product's id isn't in this
-// array, it will never appear in the podium, no matter what the backend
-// sends or which category is selected below.
-// ------------------------------------------------------------------
+
 const HIT_OF_WEEK_IDS = [
-   "117", // rank 1 — center, elevated
+   "117", 
   "118",
 "119"
 ];
 
-// Looks up each configured id in the fetched catalog, preserving the
-// order above. Unmatched ids are silently skipped rather than backfilled,
-// so the podium only ever shows products you explicitly chose.
+
 const getWeeklyHits = (products, hitIds = HIT_OF_WEEK_IDS) => {
   return hitIds
     .map((id) => products.find((p) => String(p.id) === String(id)))
@@ -733,7 +720,7 @@ const getWeeklyHits = (products, hitIds = HIT_OF_WEEK_IDS) => {
     .slice(0, 3);
 };
 
-// Builds the "All" + per-category pill list with live counts from the catalog.
+
 const buildCategoryList = (products) => {
   const counts = new Map();
   products.forEach((p) => {
@@ -750,10 +737,7 @@ const prefersReducedMotion = () =>
   window.matchMedia &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/* ============================================================
-   MOTION PRIMITIVES — small, dependency-free, transform/opacity only
-============================================================ */
-
+   
 // Fades + slides a section in once it scrolls into view.
 const Reveal = ({ children, className = "", as: Tag = "div", delay = 0 }) => {
   const ref = useRef(null);

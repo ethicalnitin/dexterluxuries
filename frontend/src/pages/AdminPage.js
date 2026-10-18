@@ -475,7 +475,7 @@ export default function AdminPage() {
             <div className="ap-preview">
               <div className="ap-preview-head">
                 <div className="ap-meta-row"><span>To</span><span>{customerEmail || "—"}</span></div>
-                <div className="ap-meta-row"><span>Subj</span><span>{productName ? `Your ${productName} Plan is Ready — Dexter Luxuries` : "—"}</span></div>
+                <div className="ap-meta-row"><span>Subj</span><span>{productName ? `Your ${productName} Plan is Ready — MKR Tools & Softwares` : "—"}</span></div>
               </div>
               <div className="ap-preview-body">
                 <p style={{margin:"0 0 8px",fontSize:"13px"}}>{message}</p>
