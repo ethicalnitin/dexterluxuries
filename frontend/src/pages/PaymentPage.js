@@ -1,12 +1,30 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  LuLock,
+  LuClock,
+  LuEye,
+  LuCopy,
+  LuCheck,
+  LuZap,
+  LuShieldCheck,
+  LuLandmark,
+  LuWallet,
+  LuMessageCircle,
+} from "react-icons/lu";
+import { FaWhatsapp, FaCcVisa, FaCcMastercard, FaCcAmex } from "react-icons/fa6";
+import { SiPaypal, SiCashapp, SiApplepay, SiBitcoin, SiTether } from "react-icons/si";
+import theme from "../theme/theme";
+import { Alert, Button } from "../components/ui";
+import { formatINR, formatUSD } from "../utils/pricing";
+import "./PaymentPage.css";
 
 const WHATSAPP_NUMBER = "+12403013547";
-const BRAND_NAME = "MKR Tools & Softwares";
+const BRAND_NAME = theme.brand.name;
 
 // ── UPI config ───────────────────────────────────────────────────────────
 const UPI_ID = "9251033152@mairtel";
-const PAYEE_NAME = "MKR Tools & Softwares";
+const PAYEE_NAME = "MKR Tools & Softwares"; // payee name sent in the UPI request
 const QR_IMAGE_URL = "https://i.ibb.co/W4chwP53/image.png";
 
 // Flip to false if the bank's UPI servers go down again.
@@ -18,13 +36,26 @@ const UTR_LENGTH = 12;
 // Backend base URL. Leave empty when Express serves the React build itself.
 const API_BASE = "https://dexterluxuries-production.up.railway.app";
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-function formatINR(amount) {
-  const num = Number(amount);
-  if (isNaN(num)) return null;
-  return num.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// ── Payment methods shown at checkout ────────────────────────────────────
+// Only UPI has a working flow. The others are listed but shown blurred and
+// marked "Unavailable" — set `available: true` only once a real payment
+// flow exists for that method.
+function UpiMark() {
+  return <span className="pay-upi-mark">UPI</span>;
 }
 
+const PAYMENT_METHODS = [
+  { id: "upi", label: "UPI", desc: "GPay, PhonePe, Paytm", icons: [UpiMark], available: UPI_AVAILABLE },
+  { id: "card", label: "Cards", desc: "Visa, Mastercard, Amex", icons: [FaCcVisa, FaCcMastercard, FaCcAmex] },
+  { id: "netbanking", label: "Netbanking", desc: "All major banks", icons: [LuLandmark] },
+  { id: "wallet", label: "Wallets", desc: "Paytm, Amazon Pay", icons: [LuWallet] },
+  { id: "paypal", label: "PayPal", desc: "PayPal balance or card", icons: [SiPaypal] },
+  { id: "cashapp", label: "Cash App", desc: "Pay with $Cashtag", icons: [SiCashapp] },
+  { id: "applepay", label: "Apple Pay", desc: "iPhone, Mac, Watch", icons: [SiApplepay] },
+  { id: "crypto", label: "Crypto", desc: "BTC, USDT", icons: [SiBitcoin, SiTether] },
+];
+
+// ── Helpers ──────────────────────────────────────────────────────────────
 function formatMMSS(totalSeconds) {
   const s = Math.max(0, totalSeconds);
   const m = Math.floor(s / 60);
@@ -39,48 +70,47 @@ function makeOrderRef() {
   return `DX-${suffix}`;
 }
 
-// ── Brand logos (inline SVG, no external requests) ───────────────────────
+// ── Payment app marks (inline SVG, no external requests) ─────────────────
 // Simplified marks. To use the official artwork, download it from each
 // brand's asset page and swap the contents of these components for an <img>.
 function GPayLogo() {
   return (
-    <span className="logo" aria-hidden="true">
+    <span className="pay-logo" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="20" height="20">
         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
       </svg>
-      <span className="logo-text" style={{ color: "#5F6368", fontWeight: 600 }}>Pay</span>
+      <span style={{ color: "#5F6368", fontWeight: 600 }}>Pay</span>
     </span>
   );
 }
 
 function PhonePeLogo() {
   return (
-    <span className="logo" aria-hidden="true">
+    <span className="pay-logo" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="22" height="22">
         <circle cx="12" cy="12" r="12" fill="#5F259F" />
         <text x="12" y="16.4" textAnchor="middle" fontSize="12.5" fontWeight="700" fill="#fff" fontFamily="'Noto Sans Devanagari','Nirmala UI',sans-serif">
           पे
         </text>
       </svg>
-      <span className="logo-text" style={{ color: "#5F259F", fontWeight: 700 }}>PhonePe</span>
+      <span style={{ color: "#5F259F", fontWeight: 700 }}>PhonePe</span>
     </span>
   );
 }
 
 function PaytmLogo() {
   return (
-    <span className="logo logo-text" aria-hidden="true" style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.6px" }}>
+    <span className="pay-logo" aria-hidden="true" style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.6px" }}>
       <span style={{ color: "#002E6E" }}>pay</span>
       <span style={{ color: "#00BAF2" }}>tm</span>
     </span>
   );
 }
 
-const WA_PATH =
-  "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347";
+const STEPS = ["Pay", "Confirm", "Get access"];
 
 export default function PaymentPage() {
   const location = useLocation();
@@ -119,6 +149,7 @@ export default function PaymentPage() {
   }, [phase]);
 
   const displayAmount = orderData?.amount != null ? formatINR(orderData.amount) : null;
+  const listedUSD = orderData?.amountUSD != null ? formatUSD(orderData.amountUSD) : null;
   const productName = orderData?.productName || "Product";
   const planName = orderData?.planName || null;
   const buyerEmail = orderData?.email || "";
@@ -239,492 +270,379 @@ export default function PaymentPage() {
     }
   }
 
-  const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  if (!orderData) return null;
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #F4F5F7;
-      --surface: #FFFFFF;
-      --surface-2: #F9FAFB;
-      --border: #E4E7EC;
-      --border-strong: #CBD1DA;
-      --text: #0F1729;
-      --text-dim: #4B5565;
-      --text-faint: #8A94A6;
-      --accent: #2F4BDB;
-      --accent-hover: #2540BF;
-      --accent-soft: #EEF1FD;
-      --success: #15803D;
-      --success-soft: #ECFDF3;
-      --danger: #C62828;
-      --danger-soft: #FEF2F2;
-      --wa: #1FAF55;
-      --radius: 14px;
-    }
-
-    body { background: var(--bg); font-family: 'Inter', system-ui, sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
-
-    .page { min-height: 100dvh; background: var(--bg); display: flex; justify-content: center; padding: 36px 16px 48px; }
-    .wrap { width: 100%; max-width: 440px; animation: rise .3s ease both; }
-    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-    .brandbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding: 0 2px; }
-    .brand { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
-    .brand-sub { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--text-faint); }
-    .brand-sub svg { width: 13px; height: 13px; }
-
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(15,23,41,.05), 0 12px 32px rgba(15,23,41,.05); overflow: hidden; }
-
-    /* ── Order summary ─────────────────────────────────── */
-    .order-summary { padding: 20px 24px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
-    .order-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    .order-name { font-size: 15px; font-weight: 600; line-height: 1.35; }
-    .order-plan { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
-    .order-amount { font-size: 24px; font-weight: 700; letter-spacing: -.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .order-meta { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-strong); display: grid; gap: 7px; }
-    .order-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .order-meta-key { font-size: 12px; color: var(--text-faint); flex-shrink: 0; }
-    .order-meta-val { font-size: 12px; color: var(--text-dim); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .order-meta-val.mono { font-family: 'IBM Plex Mono', monospace; }
-
-    .main { padding: 22px 24px 24px; }
-
-    /* ── Timer ─────────────────────────────────────────── */
-    .timer { margin-bottom: 22px; }
-    .timer-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .timer-label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
-    .timer-label svg { width: 13px; height: 13px; color: var(--text-faint); }
-    .timer-value { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; }
-    .timer--urgent .timer-value, .timer--expired .timer-value { color: var(--danger); }
-    .timer-track { height: 4px; background: var(--border); border-radius: 3px; overflow: hidden; }
-    .timer-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 1s linear, background .3s; }
-    .timer--urgent .timer-fill, .timer--expired .timer-fill { background: var(--danger); }
-
-    /* ── Steps ─────────────────────────────────────────── */
-    .step-head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
-    .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--text); color: #fff; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .step-num.done { background: var(--success); }
-    .step-num svg { width: 12px; height: 12px; }
-    .step-title { font-size: 14.5px; font-weight: 600; letter-spacing: -.1px; }
-    .step-sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
-    .step-gap { height: 1px; background: var(--border); margin: 24px 0 22px; }
-
-    /* ── Buttons ───────────────────────────────────────── */
-    .btn-primary {
-      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px;
-      background: var(--accent); border: none; border-radius: 10px; color: #fff; font-family: inherit;
-      font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s, transform .1s;
-    }
-    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-    .btn-primary:active:not(:disabled) { transform: translateY(1px); }
-    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
-    .btn-primary svg { width: 16px; height: 16px; }
-
-    .app-btn-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
-    .app-btn {
-      display: flex; align-items: center; justify-content: center; min-height: 46px; padding: 8px 6px;
-      background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; cursor: pointer;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .app-btn:hover:not(:disabled) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .app-btn:disabled { opacity: .45; cursor: not-allowed; }
-    .logo { display: inline-flex; align-items: center; gap: 5px; line-height: 1; }
-    .logo-text { font-family: 'Inter', sans-serif; font-size: 13.5px; }
-
-    .paid-btn {
-      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px;
-      background: var(--success); border: none; border-radius: 10px; color: #fff; font-family: inherit;
-      font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s, transform .1s, opacity .15s;
-    }
-    .paid-btn:hover:not(:disabled) { background: #116A32; }
-    .paid-btn:active:not(:disabled) { transform: translateY(1px); }
-    .paid-btn:disabled { background: #B6BDC9; cursor: not-allowed; }
-    .paid-btn svg { width: 16px; height: 16px; }
-
-    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .divider-row { display: flex; align-items: center; gap: 10px; margin: 18px 0 16px; }
-    .divider-line { flex: 1; height: 1px; background: var(--border); }
-    .divider-text { font-size: 12px; color: var(--text-faint); }
-
-    /* ── QR ────────────────────────────────────────────── */
-    .qr-block { display: flex; flex-direction: column; align-items: center; }
-    .qr-shell { position: relative; width: 196px; height: 196px; background: #fff; border-radius: 12px; border: 1px solid var(--border-strong); padding: 8px; overflow: hidden; }
-    .qr-shell img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 4px; filter: blur(11px); transform: scale(1.04); transition: filter .4s ease, transform .4s ease; }
-    .qr-shell.is-revealed img { filter: none; transform: scale(1); }
-    .qr-shell.is-expired img { filter: blur(11px) grayscale(1); opacity: .35; }
-    .qr-veil { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,.6); border: none; cursor: pointer; font-family: inherit; padding: 0; }
-    .qr-veil:disabled { cursor: not-allowed; }
-    .qr-veil-icon { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(47,75,219,.35); }
-    .qr-veil-icon svg { width: 17px; height: 17px; }
-    .qr-veil-text { font-size: 13px; font-weight: 600; color: var(--text); }
-    .qr-veil-sub { font-size: 11.5px; color: var(--text-dim); }
-    .qr-caption { font-size: 12px; color: var(--text-dim); margin-top: 12px; text-align: center; line-height: 1.5; }
-
-    .upi-chip { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color .15s; }
-    .upi-chip:hover { border-color: var(--accent); }
-    .upi-chip-text { font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
-    .upi-chip svg { width: 13px; height: 13px; color: var(--text-dim); flex-shrink: 0; }
-    .copied-note { font-size: 11.5px; color: var(--success); margin-top: 6px; }
-
-    /* ── UTR field ─────────────────────────────────────── */
-    .field-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 500; margin-bottom: 7px; }
-    .field-count { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--text-faint); }
-    .field-count.ok { color: var(--success); }
-    .utr-wrap { position: relative; }
-    .utr-input {
-      width: 100%; padding: 13px 42px 13px 14px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 500; letter-spacing: 2px; color: var(--text);
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .utr-input::placeholder { color: #B4BBC8; letter-spacing: 2px; }
-    .utr-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .utr-input.valid { border-color: var(--success); }
-    .utr-input.valid:focus { box-shadow: 0 0 0 3px var(--success-soft); }
-    .utr-input:disabled { background: var(--surface-2); cursor: not-allowed; }
-    .utr-check { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--success); }
-    .field-help { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
-
-    .paid-hint { font-size: 12px; color: var(--text-faint); text-align: center; margin-top: 10px; line-height: 1.55; }
-
-    .status-note { margin-top: 14px; display: flex; align-items: flex-start; justify-content: center; gap: 6px; font-size: 12.5px; text-align: center; line-height: 1.5; }
-    .status-note--danger { color: var(--danger); }
-    .status-note svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; }
-
-    .form-error { display: flex; align-items: flex-start; gap: 8px; background: var(--danger-soft); border: 1px solid #FECACA; border-radius: 8px; padding: 10px 12px; margin: 12px 0 0; font-size: 12.5px; color: #991B1B; line-height: 1.5; text-align: left; }
-    .form-error svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
-
-    .notice-banner { display: flex; align-items: flex-start; gap: 9px; background: var(--danger-soft); border: 1px solid #FECACA; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; color: #991B1B; line-height: 1.5; }
-    .notice-banner svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--danger); }
-    .notice-banner b { color: #7F1D1D; }
-
-    /* ── Delivery ──────────────────────────────────────── */
-    .success-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 4px 0 0; }
-    .success-icon { width: 54px; height: 54px; border-radius: 50%; background: var(--success-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-    .success-icon svg { width: 24px; height: 24px; color: var(--success); }
-    .success-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; letter-spacing: -.3px; }
-    .success-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.6; max-width: 320px; margin-bottom: 20px; }
-    .success-sub b { color: var(--text); font-weight: 600; }
-    .success-actions { width: 100%; }
-    .success-meta { width: 100%; margin-top: 22px; padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 8px; text-align: left; }
-    .success-meta-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
-    .success-meta-key { color: var(--text-faint); }
-    .success-meta-val { font-family: 'IBM Plex Mono', monospace; color: var(--text); font-size: 12px; }
-
-    .wa-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 14px 20px; background: var(--wa); border: none; border-radius: 10px; color: #fff; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s; }
-    .wa-btn:hover { background: #189449; }
-    .wa-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
-
-    .trust-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 18px; font-size: 12px; color: var(--text-faint); }
-    .trust-line svg { width: 12px; height: 12px; }
-    .footer { margin-top: 6px; text-align: center; font-size: 11.5px; color: var(--text-faint); }
-
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-    @media (prefers-reduced-motion: reduce) {
-      .wrap { animation: none; }
-      .qr-shell img, .timer-fill { transition: none; }
-    }
-    @media (max-width: 400px) {
-      .main { padding: 18px; }
-      .order-summary { padding: 16px 18px; }
-      .qr-shell { width: 176px; height: 176px; }
-      .logo-text { font-size: 12.5px; }
-    }
-  `;
-
-  if (!orderData) {
-    return (
-      <div className="page">
-        <style>{css}</style>
-      </div>
-    );
-  }
-
+  const amountLabel = displayAmount !== null ? `₹${displayAmount}` : "—";
   const payLabel = displayAmount !== null ? `Pay ₹${displayAmount} with UPI` : "Pay with UPI";
+  const currentStep = phase === "delivery" ? 2 : utrValid ? 1 : 0;
 
+  // ---------- UPI building blocks ----------
   const qrPanel = (
-    <div className="qr-block">
-      <div className={`qr-shell ${qrRevealed ? "is-revealed" : ""} ${expired ? "is-expired" : ""}`}>
+    <div className="pay-qr">
+      <div className={`pay-qr__frame${qrRevealed ? " is-revealed" : ""}${expired ? " is-expired" : ""}`}>
         <img src={QR_IMAGE_URL} alt="UPI QR code" />
         {!qrRevealed && (
-          <button className="qr-veil" type="button" onClick={() => setQrRevealed(true)} disabled={expired} aria-label="Show QR code">
-            <span className="qr-veil-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+          <button className="pay-qr__veil" type="button" onClick={() => setQrRevealed(true)} disabled={expired} aria-label="Show QR code">
+            <span className="pay-qr__veil-icon">
+              <LuEye aria-hidden="true" />
             </span>
-            <span className="qr-veil-text">Show QR code</span>
-            <span className="qr-veil-sub">{expired ? "Window closed" : "Scan from another phone"}</span>
+            <span className="pay-qr__veil-text">Show QR code</span>
+            <span className="pay-qr__veil-sub">{expired ? "Window closed" : "Scan from another phone"}</span>
           </button>
         )}
       </div>
-      <div className="qr-caption">{qrRevealed ? "Scan with any UPI app, then come back here." : "Hidden until you need it."}</div>
-      <div
-        className="upi-chip"
-        onClick={() => handleCopy(UPI_ID, setCopiedUpi)}
-        role="button"
-        tabIndex={0}
-        aria-label="Copy UPI ID"
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCopy(UPI_ID, setCopiedUpi); }}
-      >
-        <span className="upi-chip-text">{UPI_ID}</span>
-        {copiedUpi ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L19 7" /></svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-        )}
-      </div>
-      {copiedUpi && <div className="copied-note">UPI ID copied</div>}
+      <p className="pay-qr__caption">{qrRevealed ? "Scan with any UPI app, then come back here." : "Hidden until you need it."}</p>
+    </div>
+  );
+
+  const upiIdChip = (
+    <div className="pay-upi-id">
+      <span className="pay-upi-id__label">UPI ID</span>
+      <button type="button" className="pay-upi-chip" onClick={() => handleCopy(UPI_ID, setCopiedUpi)} aria-label="Copy UPI ID">
+        <span className="ui-mono">{UPI_ID}</span>
+        {copiedUpi ? <LuCheck aria-hidden="true" className="pay-upi-chip__ok" /> : <LuCopy aria-hidden="true" />}
+      </button>
+      {copiedUpi && (
+        <span className="pay-copied" role="status">
+          Copied
+        </span>
+      )}
     </div>
   );
 
   const payButtons = (
-    <>
-      <button className="btn-primary" disabled={expired} onClick={() => (window.location.href = genericUpiLink)}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" /></svg>
+    <div className="pay-buttons">
+      <Button variant="primary" size="lg" block disabled={expired} onClick={() => (window.location.href = genericUpiLink)} icon={<LuZap />}>
         {payLabel}
-      </button>
-      <div className="app-btn-row">
-        <button className="app-btn" disabled={expired} onClick={() => (window.location.href = gpayLink)} aria-label="Pay with Google Pay" title="Google Pay">
+      </Button>
+      <div className="pay-apps">
+        <button className="pay-app" type="button" disabled={expired} onClick={() => (window.location.href = gpayLink)} aria-label="Pay with Google Pay" title="Google Pay">
           <GPayLogo />
         </button>
-        <button className="app-btn" disabled={expired} onClick={() => (window.location.href = phonepeLink)} aria-label="Pay with PhonePe" title="PhonePe">
+        <button className="pay-app" type="button" disabled={expired} onClick={() => (window.location.href = phonepeLink)} aria-label="Pay with PhonePe" title="PhonePe">
           <PhonePeLogo />
         </button>
-        <button className="app-btn" disabled={expired} onClick={() => (window.location.href = paytmLink)} aria-label="Pay with Paytm" title="Paytm">
+        <button className="pay-app" type="button" disabled={expired} onClick={() => (window.location.href = paytmLink)} aria-label="Pay with Paytm" title="Paytm">
           <PaytmLogo />
         </button>
       </div>
-    </>
+    </div>
   );
 
-  const errorIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+  const scanSteps = (
+    <ol className="pay-scan-steps">
+      <li>
+        <span>Open any UPI app on your phone</span>
+      </li>
+      <li>
+        <span>Scan the QR code or pay to the UPI ID</span>
+      </li>
+      <li>
+        <span>
+          Pay exactly <strong className="ui-mono">{amountLabel}</strong>, then enter the UTR below
+        </span>
+      </li>
+    </ol>
   );
 
   return (
-    <div className="page">
-      <style>{css}</style>
-
-      <div className="wrap">
-        <div className="brandbar">
-          <div className="brand">{BRAND_NAME}</div>
-          <div className="brand-sub">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="5" y="11" width="14" height="9" rx="1.5" />
-              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-            </svg>
+    <div className="pay-page">
+      {/* ---------- Title + progress ---------- */}
+      <div className="pay-head">
+        <div className="pay-head__title">
+          <h1>Checkout</h1>
+          <span className="pay-head__secure">
+            <LuLock aria-hidden="true" />
             Secure checkout
-          </div>
+          </span>
         </div>
+        <ol className="pay-progress" aria-label="Checkout progress">
+          {STEPS.map((label, i) => {
+            const state = i < currentStep ? "done" : i === currentStep ? "current" : "todo";
+            return (
+              <li key={label} className={`pay-progress__step is-${state}`} aria-current={state === "current" ? "step" : undefined}>
+                <span className="pay-progress__dot">{state === "done" ? <LuCheck aria-hidden="true" /> : i + 1}</span>
+                <span className="pay-progress__label">{label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
-        <div className="card">
-          <div className="order-summary">
-            <div className="order-row">
-              <div>
-                <div className="order-name">{productName}</div>
-                {planName && <div className="order-plan">{planName}</div>}
-              </div>
-              <div className="order-amount">{displayAmount !== null ? `₹${displayAmount}` : "—"}</div>
-            </div>
-            <div className="order-meta">
-              {buyerEmail && (
-                <div className="order-meta-row">
-                  <span className="order-meta-key">Delivering to</span>
-                  <span className="order-meta-val">{buyerEmail}</span>
-                </div>
-              )}
-              <div className="order-meta-row">
-                <span className="order-meta-key">Order reference</span>
-                <span className="order-meta-val mono">{orderRef}</span>
-              </div>
+      <div className="pay-shell">
+        {/* ---------- Order summary (left on laptops, top on phones) ---------- */}
+        <aside className="pay-side" aria-label="Order summary">
+          <div className="pay-side__merchant">
+            <img src={theme.brand.logo} alt="" width="40" height="40" />
+            <div>
+              <strong>{BRAND_NAME}</strong>
+              <span>Order {orderRef}</span>
             </div>
           </div>
 
-          <div className="main">
-            {/* ================= PAY ================= */}
-            {phase === "pay" && (
-              <>
-                {!UPI_AVAILABLE ? (
-                  <>
-                    <div className="notice-banner">
-                      {errorIcon}
-                      <span><b>UPI is down right now.</b> Our bank's servers aren't accepting payments. Message us and we'll send you a working payment link in a minute.</span>
-                    </div>
-                    <button className="wa-btn" onClick={() => openWhatsApp("UPI is showing as unavailable — please send me a payment link.")}>
-                      <svg viewBox="0 0 24 24" fill="currentColor"><path d={WA_PATH} /></svg>
-                      Get a payment link
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className={`timer ${expired ? "timer--expired" : urgent ? "timer--urgent" : ""}`}>
-                      <div className="timer-top">
-                        <span className="timer-label">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
-                          {expired ? "Payment window closed" : "Price held for"}
-                        </span>
-                        {!expired && <span className="timer-value">{formatMMSS(secondsLeft)}</span>}
-                      </div>
-                      <div className="timer-track">
-                        <div className="timer-fill" style={{ width: `${expired ? 0 : progressPct}%` }} />
-                      </div>
-                    </div>
+          <div className="pay-side__amount">
+            <span className="pay-side__muted">Amount to pay</span>
+            <strong className="ui-mono">{amountLabel}</strong>
+            {listedUSD && <span className="pay-side__muted">Listed at {listedUSD} · charged in INR</span>}
+          </div>
 
-                    {/* Step 1 — pay */}
-                    <div className="step-head">
-                      <span className="step-num">1</span>
+          <dl className="pay-side__details">
+            <div>
+              <dt>Product</dt>
+              <dd>{productName}</dd>
+            </div>
+            {planName && (
+              <div>
+                <dt>Plan</dt>
+                <dd>{planName}</dd>
+              </div>
+            )}
+            {buyerEmail && (
+              <div>
+                <dt>Delivering to</dt>
+                <dd>{buyerEmail}</dd>
+              </div>
+            )}
+          </dl>
+
+          {phase === "pay" && UPI_AVAILABLE && (
+            <div className={`pay-timer${expired ? " pay-timer--expired" : urgent ? " pay-timer--urgent" : ""}`}>
+              <div className="pay-timer__top">
+                <span className="pay-timer__label">
+                  <LuClock aria-hidden="true" />
+                  {expired ? "Payment window closed" : "Price held for"}
+                </span>
+                {!expired && <span className="pay-timer__value ui-mono">{formatMMSS(secondsLeft)}</span>}
+              </div>
+              <div
+                className="pay-timer__track"
+                role="progressbar"
+                aria-label="Time left to pay"
+                aria-valuemin={0}
+                aria-valuemax={PAYMENT_WINDOW_SECONDS}
+                aria-valuenow={expired ? 0 : secondsLeft}
+              >
+                <div className="pay-timer__fill" style={{ width: `${expired ? 0 : progressPct}%` }} />
+              </div>
+            </div>
+          )}
+
+          <ul className="pay-side__assurances">
+            <li>
+              <LuShieldCheck aria-hidden="true" />
+              UTR matched against our bank statement
+            </li>
+            <li>
+              <FaWhatsapp aria-hidden="true" />
+              Access delivered on WhatsApp in 15–30 minutes
+            </li>
+          </ul>
+
+          <button type="button" className="pay-side__help" onClick={() => openWhatsApp("I need help completing my payment.")}>
+            <LuMessageCircle aria-hidden="true" />
+            Need help? Chat with us
+          </button>
+        </aside>
+
+        {/* ---------- Payment area ---------- */}
+        <section className="pay-main">
+          {phase === "pay" && (
+            <>
+              <div className="pay-block">
+                <h2 className="pay-block__title">Payment method</h2>
+                <div className="pay-methods" role="radiogroup" aria-label="Payment method">
+                  {PAYMENT_METHODS.map(({ id, label, desc, icons, available }) => (
+                    <div
+                      key={id}
+                      role="radio"
+                      aria-checked={available && id === "upi"}
+                      aria-disabled={!available}
+                      aria-label={available ? `${label} — ${desc}` : `${label} — unavailable`}
+                      tabIndex={available ? 0 : -1}
+                      className={`pay-method${available ? " is-selected" : " is-unavailable"}`}
+                    >
+                      <span className="pay-method__body" aria-hidden="true">
+                        <span className="pay-method__icons">
+                          {icons.map((Icon, i) => (
+                            <Icon key={i} />
+                          ))}
+                        </span>
+                        <span className="pay-method__label">{label}</span>
+                        <span className="pay-method__desc">{desc}</span>
+                      </span>
+                      {available ? (
+                        <span className="pay-method__check" aria-hidden="true">
+                          <LuCheck />
+                        </span>
+                      ) : (
+                        <span className="pay-method__flag" aria-hidden="true">
+                          Unavailable
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {!UPI_AVAILABLE ? (
+                <div className="pay-block">
+                  <Alert variant="danger">
+                    <strong>UPI is down right now.</strong> Our bank's servers aren't accepting payments. Message us and we'll send you a working payment link in a minute.
+                  </Alert>
+                  <Button variant="whatsapp" size="lg" block icon={<FaWhatsapp />} onClick={() => openWhatsApp("UPI is showing as unavailable — please send me a payment link.")}>
+                    Get a payment link
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {/* Step 1 — pay */}
+                  <div className="pay-block">
+                    <div className="pay-step">
+                      <span className="pay-step__num">1</span>
                       <div>
-                        <div className="step-title">Make the payment</div>
-                        <div className="step-sub">Pay using any UPI app</div>
+                        <h2 className="pay-step__title">Pay {amountLabel} with UPI</h2>
+                        <p className="pay-step__sub">Use any UPI app — Google Pay, PhonePe, Paytm, BHIM and more</p>
                       </div>
                     </div>
 
                     {isMobile ? (
-                      <>
+                      <div className="pay-upi pay-upi--mobile">
                         {payButtons}
-                        <div className="divider-row">
-                          <div className="divider-line" />
-                          <div className="divider-text">or scan</div>
-                          <div className="divider-line" />
+                        <div className="pay-divider">
+                          <span>or scan the QR code</span>
                         </div>
                         {qrPanel}
-                      </>
+                        {upiIdChip}
+                      </div>
                     ) : (
-                      <>
+                      <div className="pay-upi">
                         {qrPanel}
-                        <div className="divider-row">
-                          <div className="divider-line" />
-                          <div className="divider-text">or open an app</div>
-                          <div className="divider-line" />
+                        <div className="pay-upi__info">
+                          {scanSteps}
+                          {upiIdChip}
+                          <div className="pay-divider">
+                            <span>or open an app on this device</span>
+                          </div>
+                          {payButtons}
                         </div>
-                        {payButtons}
-                      </>
+                      </div>
                     )}
+                  </div>
 
-                    <div className="step-gap" />
-
-                    {/* Step 2 — confirm with UTR */}
-                    <div className="step-head">
-                      <span className={`step-num ${utrValid ? "done" : ""}`}>
-                        {utrValid ? (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2"><path d="M5 12l5 5L19 7" /></svg>
-                        ) : (
-                          "2"
-                        )}
+                  {/* Step 2 — confirm with UTR */}
+                  <div className="pay-block">
+                    <div className="pay-step">
+                      <span className={`pay-step__num${utrValid ? " pay-step__num--done" : ""}`}>
+                        {utrValid ? <LuCheck aria-label="Done" /> : "2"}
                       </span>
                       <div>
-                        <div className="step-title">Confirm your payment</div>
-                        <div className="step-sub">Enter the UTR from your payment receipt</div>
+                        <h2 className="pay-step__title">Confirm your payment</h2>
+                        <p className="pay-step__sub">Enter the UTR from your payment receipt</p>
                       </div>
                     </div>
 
-                    <label className="field-label" htmlFor="utr-input">
-                      <span>UTR number</span>
-                      <span className={`field-count ${utrValid ? "ok" : ""}`}>{utr.length}/{UTR_LENGTH}</span>
-                    </label>
-                    <div className="utr-wrap">
-                      <input
-                        id="utr-input"
-                        className={`utr-input ${utrValid ? "valid" : ""}`}
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        maxLength={UTR_LENGTH}
-                        placeholder="000000000000"
-                        value={utr}
-                        onChange={handleUtrChange}
-                        disabled={expired || confirming}
-                        aria-describedby="utr-help"
-                      />
-                      {utrValid && (
-                        <svg className="utr-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                          <path d="M5 12l5 5L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="field-help" id="utr-help">
-                      Find the 12-digit UTR (also called UPI Ref No.) in your app under the payment's transaction details.
-                    </div>
-
-                    {confirmError && (
-                      <div className="form-error" role="alert">
-                        {errorIcon}
-                        {confirmError}
+                    <div className="pay-confirm">
+                      <div className="ui-field">
+                        <div className="ui-label-row">
+                          <label className="ui-label" htmlFor="utr-input">
+                            UTR number
+                          </label>
+                          <span className={`pay-utr__count ui-mono${utrValid ? " is-ok" : ""}`}>
+                            {utr.length}/{UTR_LENGTH}
+                          </span>
+                        </div>
+                        <div className="pay-utr">
+                          <input
+                            id="utr-input"
+                            className={`ui-input pay-utr__input${utrValid ? " ui-input--valid" : ""}`}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            maxLength={UTR_LENGTH}
+                            placeholder="000000000000"
+                            value={utr}
+                            onChange={handleUtrChange}
+                            disabled={expired || confirming}
+                            aria-describedby="utr-help"
+                          />
+                          {utrValid && <LuCheck className="pay-utr__check" aria-hidden="true" />}
+                        </div>
+                        <p className="ui-help" id="utr-help">
+                          Find the 12-digit UTR (also called UPI Ref No.) in your app under the payment's transaction details.
+                        </p>
                       </div>
-                    )}
 
-                    <button className="paid-btn" style={{ marginTop: 16 }} disabled={!canConfirm} onClick={confirmPayment}>
-                      {confirming ? (
-                        <span className="spinner" />
-                      ) : (
-                        <>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12l5 5L19 7" /></svg>
-                          I've paid — get my access
-                        </>
-                      )}
-                    </button>
-                    <div className="paid-hint">
-                      We match the UTR against our bank statement before delivering. Access arrives on WhatsApp within 15–30 minutes.
+                      {confirmError && <Alert variant="danger">{confirmError}</Alert>}
+
+                      <Button
+                        variant="success"
+                        size="lg"
+                        block
+                        disabled={!canConfirm}
+                        loading={confirming}
+                        onClick={confirmPayment}
+                        icon={<LuCheck />}
+                      >
+                        I've paid — get my access
+                      </Button>
+                      <p className="pay-hint">
+                        We match the UTR against our bank statement before delivering. Access arrives on WhatsApp within 15–30 minutes.
+                      </p>
+
+                      {expired && <Alert variant="danger">This window closed. Message us on WhatsApp and we'll reopen it.</Alert>}
                     </div>
-
-                    {expired && (
-                      <div className="status-note status-note--danger">
-                        {errorIcon}
-                        This window closed. Message us on WhatsApp and we'll reopen it.
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* ================= DELIVERY ================= */}
-            {phase === "delivery" && (
-              <div className="success-wrap">
-                <div className="success-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12l5 5L19 7" /></svg>
-                </div>
-                <div className="success-title">Payment submitted</div>
-                <div className="success-sub">
-                  Open WhatsApp to collect your access. We verify the transfer and deliver within <b>15–30 minutes</b>.
-                </div>
-
-                {confirmError && (
-                  <div className="form-error" style={{ marginBottom: 18, width: "100%" }} role="alert">
-                    {errorIcon}
-                    {confirmError}
                   </div>
-                )}
+                </>
+              )}
+            </>
+          )}
 
-                <div className="success-actions">
-                  <button className="wa-btn" onClick={() => openWhatsApp("I've completed my UPI payment — please confirm and deliver access.")}>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d={WA_PATH} /></svg>
-                    Collect my access
-                  </button>
+          {/* ================= DELIVERY ================= */}
+          {phase === "delivery" && (
+            <div className="pay-block pay-success">
+              <span className="pay-success__icon">
+                <LuCheck aria-hidden="true" />
+              </span>
+              <h2 className="pay-success__title">Payment submitted</h2>
+              <p className="pay-success__text">
+                Open WhatsApp to collect your access. We verify the transfer and deliver within <strong>15–30 minutes</strong>.
+              </p>
+
+              {confirmError && <Alert variant="danger">{confirmError}</Alert>}
+
+              <Button
+                variant="whatsapp"
+                size="lg"
+                block
+                icon={<FaWhatsapp />}
+                onClick={() => openWhatsApp("I've completed my UPI payment — please confirm and deliver access.")}
+              >
+                Collect my access
+              </Button>
+
+              <dl className="pay-success__meta">
+                <div>
+                  <dt>Order reference</dt>
+                  <dd className="ui-mono">{orderRef}</dd>
                 </div>
-
-                <div className="success-meta">
-                  <div className="success-meta-row"><span className="success-meta-key">Order reference</span><span className="success-meta-val">{orderRef}</span></div>
-                  <div className="success-meta-row"><span className="success-meta-key">UTR</span><span className="success-meta-val">{utr}</span></div>
-                  <div className="success-meta-row"><span className="success-meta-key">Amount</span><span className="success-meta-val">{displayAmount !== null ? `₹${displayAmount}` : "—"}</span></div>
+                <div>
+                  <dt>UTR</dt>
+                  <dd className="ui-mono">{utr}</dd>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="trust-line">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-          Encrypted transfer · Manual verification
-        </div>
-        <div className="footer">© {BRAND_NAME}</div>
+                <div>
+                  <dt>Amount</dt>
+                  <dd className="ui-mono">{amountLabel}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </section>
       </div>
+
+      <p className="pay-trust">
+        <LuShieldCheck aria-hidden="true" />
+        Encrypted transfer · Manual verification
+      </p>
     </div>
   );
 }

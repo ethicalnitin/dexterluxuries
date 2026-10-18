@@ -14,27 +14,27 @@ if (isConfigured) {
   });
 } else {
   console.warn(
-    "[Mailer] SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS not fully set — OTP codes will be logged to the " +
+    "[Mailer] SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS not fully set — password reset codes will be logged to the " +
       "server console instead of emailed. Fine for local testing, NOT fine for production."
   );
 }
 
-async function sendOtpEmail(email, code) {
+async function sendPasswordResetEmail(email, code) {
   if (!transporter) {
-    console.warn(`[Mailer] (dev fallback) OTP for ${email} is: ${code}`);
+    console.warn(`[Mailer] (dev fallback) Password reset code for ${email} is: ${code}`);
     return { delivered: false };
   }
 
   await transporter.sendMail({
     from: SMTP_FROM || SMTP_USER,
     to: email,
-    subject: "Your ChartVault sign-in code",
-    text: `Your ChartVault verification code is ${code}. It expires in 5 minutes. If you didn't request this, you can ignore this email.`,
+    subject: "Your ChartVault password reset code",
+    text: `Your ChartVault password reset code is ${code}. It expires in 5 minutes. If you didn't ask to reset your password, you can ignore this email — your password won't change.`,
     html: `
       <div style="font-family:sans-serif;padding:24px;">
-        <p style="color:#444;">Your ChartVault verification code is:</p>
+        <p style="color:#444;">Your ChartVault password reset code is:</p>
         <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:12px 0;">${code}</p>
-        <p style="color:#888;font-size:13px;">Expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
+        <p style="color:#888;font-size:13px;">Expires in 5 minutes. If you didn't ask to reset your password, you can ignore this email — your password won't change.</p>
       </div>
     `,
   });
@@ -42,4 +42,4 @@ async function sendOtpEmail(email, code) {
   return { delivered: true };
 }
 
-module.exports = { sendOtpEmail, isConfigured };
+module.exports = { sendPasswordResetEmail, isConfigured };

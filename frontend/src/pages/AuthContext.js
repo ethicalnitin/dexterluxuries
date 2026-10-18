@@ -2,56 +2,64 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import LoginModal from "./LoginModal";
 
 /* ============================================================
-   AUTH CONTEXT — email + OTP, no passwords.
+   AUTH CONTEXT — email + password accounts.
 
-   Wrap your whole app in <AuthProvider> once, near the root
-   (e.g. in App.jsx, outside or inside the router):
+   <AuthProvider> wraps the app once (see App.js) and renders the
+   login / sign-up modal itself. Anywhere in the app:
 
-     <AuthProvider>
-       <BrowserRouter>
-         <Routes>...</Routes>
-       </BrowserRouter>
-     </AuthProvider>
+     const { user, isAuthenticated, openLogin, openSignup, logout } = useAuth();
 
-   Then anywhere you need to gate an action behind login — most
-   importantly a "Buy now" / "Checkout" button — do:
+   To gate an action behind login (e.g. a "Buy now" button):
 
      const { requireAuth } = useAuth();
-     const handleBuyNow = () => {
-       requireAuth(() => {
-         // this only runs once the user is verified
-         startCheckout(product);
-       });
-     };
+     requireAuth(() => startCheckout(product)); // runs once signed in
 
-   IMPORTANT — the backend now actually enforces login on
-   /api/orders/notify and /api/deposit. Any fetch call to those
-   endpoints must include the token:
+   For an API route protected by requireAuth on the backend, send
+   the token:
 
      const { token } = useAuth();
-     fetch("https://dexterluxuries-production.up.railway.applocalhost:3046/api/orders/notify", {
-       method: "POST",
-       headers: {
-         "Content-Type": "application/json",
-         Authorization: `Bearer ${token}`,
-       },
-       body: JSON.stringify({ ... }),
-     });
-
-   Requests without that header will get a 401 from the server.
+     fetch(`${API_BASE}/something`, { headers: { Authorization: `Bearer ${token}` } });
 ============================================================ */
 
 const AuthContext = createContext(null);
 
 const STORAGE_TOKEN_KEY = "cv_auth_token";
 const STORAGE_USER_KEY = "cv_auth_user";
-const API_BASE = "http://localhost:3046/api";
+// Same convention as ProductPage.js. For local dev, put
+// REACT_APP_API_BASE=http://localhost:3046/api in frontend/.env.local
+const API_BASE =process.env.REACT_APP_API_BASE || "http://localhost:3046/api";
+
+async function postJson(path, body, fallbackError) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Can't reach the server. Check your connection and try again.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || fallbackError);
+  return data;
+}
+
+function readStoredSession() {
+  try {
+    const token = localStorage.getItem(STORAGE_TOKEN_KEY);
+    const user = JSON.parse(localStorage.getItem(STORAGE_USER_KEY) || "null");
+    return token && user ? { token, user } : null;
+  } catch {
+    return null; // private browsing, or corrupted JSON
+  }
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [isReady, setIsReady] = useState(false); // true once the initial session check has finished
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalView, setModalView] = useState(null); // null (closed) | 'login' | 'signup' | 'forgot'
   const pendingActionRef = useRef(null);
 
   const persistSession = useCallback((nextToken, nextUser) => {
@@ -76,79 +84,91 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // On first load: read whatever's in localStorage, then confirm with the
-  // server that the token is still valid (it may have expired or the OTP
-  // secret may have rotated) before trusting it.
+  // On first load: show the stored session straight away, then confirm with
+  // the server that the token is still valid. Only a 401 signs the user out —
+  // a network error or a sleeping server shouldn't log anyone out.
   useEffect(() => {
-    const restore = async () => {
-      let storedToken = null;
-      let storedUser = null;
-      try {
-        storedToken = localStorage.getItem(STORAGE_TOKEN_KEY);
-        storedUser = localStorage.getItem(STORAGE_USER_KEY);
-      } catch {
-        // ignore
-      }
-
-      if (!storedToken || !storedUser) {
-        setIsReady(true);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
-        });
-        if (!res.ok) throw new Error("Session invalid");
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch {
-        clearSession();
-      } finally {
-        setIsReady(true);
-      }
-    };
-
-    restore();
-  }, [clearSession]);
-
-  const sendOtp = useCallback(async (email) => {
-    const res = await fetch(`${API_BASE}/auth/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || "Couldn't send the code. Try again.");
+    const stored = readStoredSession();
+    if (!stored) {
+      setIsReady(true);
+      return;
     }
-    return true;
+    setToken(stored.token);
+    setUser(stored.user);
+
+    let cancelled = false;
+    fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${stored.token}` } })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 401) {
+          clearSession();
+          return;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.user) persistSession(stored.token, data.user);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearSession, persistSession]);
+
+  // Keep tabs in sync: logging in or out in one tab updates the others.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== STORAGE_TOKEN_KEY && e.key !== STORAGE_USER_KEY) return;
+      const stored = readStoredSession();
+      setToken(stored ? stored.token : null);
+      setUser(stored ? stored.user : null);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const verifyOtp = useCallback(
-    async (email, otp) => {
-      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "That code didn't work. Check it and try again.");
-      }
-      const data = await res.json();
+  // Called after any successful login / sign-up / reset.
+  const completeAuth = useCallback(
+    (data) => {
       persistSession(data.token, data.user);
-
-      // Run whatever action was waiting on login (e.g. "Buy now"), then close.
+      setModalView(null);
+      // Run whatever action was waiting on login (e.g. "Buy now").
       if (pendingActionRef.current) {
         const action = pendingActionRef.current;
         pendingActionRef.current = null;
         action();
       }
-      setIsModalOpen(false);
-      return data;
+      return data.user;
     },
     [persistSession]
+  );
+
+  const signup = useCallback(
+    async (name, email, password) =>
+      completeAuth(await postJson("/auth/signup", { name, email, password }, "Couldn't create your account. Try again.")),
+    [completeAuth]
+  );
+
+  const login = useCallback(
+    async (email, password) =>
+      completeAuth(await postJson("/auth/login", { email, password }, "Couldn't log you in. Try again.")),
+    [completeAuth]
+  );
+
+  const requestPasswordReset = useCallback(async (email) => {
+    await postJson("/auth/forgot-password", { email }, "Couldn't send the reset code. Try again.");
+  }, []);
+
+  const resetPassword = useCallback(
+    async (email, otp, password) =>
+      completeAuth(
+        await postJson("/auth/reset-password", { email, otp, password }, "Couldn't reset your password. Try again.")
+      ),
+    [completeAuth]
   );
 
   const logout = useCallback(() => {
@@ -157,15 +177,20 @@ export const AuthProvider = ({ children }) => {
 
   const openLogin = useCallback(() => {
     pendingActionRef.current = null;
-    setIsModalOpen(true);
+    setModalView("login");
+  }, []);
+
+  const openSignup = useCallback(() => {
+    pendingActionRef.current = null;
+    setModalView("signup");
   }, []);
 
   const closeLogin = useCallback(() => {
     pendingActionRef.current = null;
-    setIsModalOpen(false);
+    setModalView(null);
   }, []);
 
-  // The main entry point for gating purchases (see file header for usage).
+  // The main entry point for gating actions behind login (see file header).
   const requireAuth = useCallback(
     (action) => {
       if (user) {
@@ -173,7 +198,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       pendingActionRef.current = action;
-      setIsModalOpen(true);
+      setModalView("login");
     },
     [user]
   );
@@ -183,10 +208,13 @@ export const AuthProvider = ({ children }) => {
     token,
     isAuthenticated: Boolean(user),
     isReady,
-    sendOtp,
-    verifyOtp,
+    signup,
+    login,
+    requestPasswordReset,
+    resetPassword,
     logout,
     openLogin,
+    openSignup,
     closeLogin,
     requireAuth,
   };
@@ -194,7 +222,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <LoginModal isOpen={isModalOpen} onClose={closeLogin} />
+      <LoginModal isOpen={modalView !== null} initialView={modalView || "login"} onClose={closeLogin} />
     </AuthContext.Provider>
   );
 };

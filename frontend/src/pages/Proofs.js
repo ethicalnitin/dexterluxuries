@@ -1,786 +1,112 @@
-import React, { useEffect, useRef } from "react";
-import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
-
-const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap');
-
-  :root {
-    --bg: #05050A;
-    --bg2: #0A0A13;
-    --surface: rgba(255,255,255,0.045);
-    --surface-hover: rgba(255,255,255,0.07);
-    --border: rgba(255,255,255,0.09);
-    --violet: #8B5CF6;
-    --violet-soft: #C4B5FD;
-    --cyan: #22D3EE;
-    --text: #F4F2FF;
-    --text-dim: rgba(244,242,255,0.62);
-    --text-faint: rgba(244,242,255,0.38);
-    --grad: linear-gradient(92deg, var(--violet) 0%, var(--cyan) 100%);
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  .proofs-root {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* ── HERO ── */
-  .proofs-hero {
-    position: relative;
-    min-height: 92vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 80px 24px 60px;
-    overflow: hidden;
-  }
-
-  .proofs-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 70% 50% at 50% 0%, rgba(139,92,246,0.2) 0%, transparent 70%),
-      radial-gradient(ellipse 40% 40% at 20% 80%, rgba(34,211,238,0.09) 0%, transparent 60%);
-    pointer-events: none;
-  }
-
-  .proofs-hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--violet-soft);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    padding: 8px 20px;
-    border-radius: 100px;
-    margin-bottom: 36px;
-    animation: fadeUp 0.6s ease both;
-  }
-
-  .proofs-hero-badge span { font-size: 14px; }
-
-  .proofs-hero-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2.8rem, 7vw, 5.5rem);
-    font-weight: 700;
-    line-height: 1.08;
-    letter-spacing: -1.5px;
-    margin-bottom: 24px;
-    animation: fadeUp 0.7s 0.1s ease both;
-  }
-
-  .proofs-hero-title em {
-    font-style: normal;
-    background: var(--grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    display: block;
-  }
-
-  .proofs-hero-sub {
-    font-size: clamp(1rem, 2vw, 1.2rem);
-    color: var(--text-dim);
-    max-width: 520px;
-    line-height: 1.7;
-    font-weight: 300;
-    margin-bottom: 48px;
-    animation: fadeUp 0.7s 0.2s ease both;
-  }
-
-  .proofs-hero-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--grad);
-    color: #0A0A13;
-    font-weight: 600;
-    font-size: 14.5px;
-    letter-spacing: 0.2px;
-    padding: 15px 34px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition: transform 0.2s, box-shadow 0.2s;
-    animation: fadeUp 0.7s 0.3s ease both;
-  }
-
-  .proofs-hero-cta:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 32px rgba(139,92,246,0.35);
-  }
-
-  .proofs-hero-cta svg { width: 16px; height: 16px; }
-
-  .proofs-scroll-line {
-    position: absolute;
-    bottom: 32px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    animation: fadeUp 1s 0.8s ease both;
-  }
-
-  .proofs-scroll-line span {
-    font-size: 10px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-
-  .proofs-scroll-bar {
-    width: 1px;
-    height: 48px;
-    background: linear-gradient(to bottom, var(--violet), transparent);
-    animation: scrollPulse 2s infinite;
-  }
-
-  /* ── STATS ── */
-  .proofs-stats {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    background: var(--bg2);
-  }
-
-  .proofs-stat {
-    flex: 1;
-    min-width: 160px;
-    max-width: 240px;
-    text-align: center;
-    padding: 40px 20px;
-    border-right: 1px solid var(--border);
-    transition: background 0.3s;
-  }
-
-  .proofs-stat:last-child { border-right: none; }
-  .proofs-stat:hover { background: var(--surface); }
-
-  .proofs-stat-num {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 2.6rem;
-    font-weight: 700;
-    background: var(--grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    line-height: 1;
-    margin-bottom: 8px;
-  }
-
-  .proofs-stat-label {
-    font-size: 11.5px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    font-weight: 500;
-  }
-
-  /* ── TRUST BADGES ── */
-  .proofs-trust {
-    padding: 90px 24px;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-
-  .proofs-section-eyebrow {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--violet-soft);
-    margin-bottom: 14px;
-  }
-
-  .proofs-section-heading {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(1.8rem, 4vw, 3rem);
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    margin-bottom: 52px;
-    line-height: 1.2;
-  }
-
-  .proofs-trust-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 18px;
-  }
-
-  .proofs-trust-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 32px 26px;
-    transition: transform 0.25s, border-color 0.25s, background 0.25s;
-  }
-
-  .proofs-trust-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(139,92,246,0.4);
-    background: var(--surface-hover);
-  }
-
-  .trust-icon {
-    font-size: 26px;
-    margin-bottom: 16px;
-    display: block;
-  }
-
-  .trust-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin-bottom: 10px;
-    color: var(--text);
-  }
-
-  .trust-desc {
-    font-size: 13.5px;
-    color: var(--text-dim);
-    line-height: 1.65;
-    font-weight: 300;
-  }
-
-  /* ── PROOF DRIVE SECTION ── */
-  .proofs-drive-section {
-    background: var(--bg2);
-    padding: 90px 24px;
-    text-align: center;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .proofs-drive-section::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 60% 80% at 50% 50%, rgba(139,92,246,0.08) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .proofs-drive-inner {
-    max-width: 640px;
-    margin: 0 auto;
-    position: relative;
-  }
-
-  .proofs-drive-icon {
-    font-size: 52px;
-    margin-bottom: 24px;
-    display: block;
-  }
-
-  .proofs-drive-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    margin-bottom: 16px;
-  }
-
-  .proofs-drive-desc {
-    font-size: 15px;
-    color: var(--text-dim);
-    line-height: 1.7;
-    margin-bottom: 36px;
-    font-weight: 300;
-  }
-
-  .proofs-drive-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-    padding: 13px 30px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition: all 0.2s;
-  }
-
-  .proofs-drive-btn:hover {
-    background: var(--grad);
-    color: #0A0A13;
-    border-color: transparent;
-  }
-
-  /* ── REVIEWS ── */
-  .proofs-reviews {
-    padding: 90px 24px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .proofs-review-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 48px 48px 40px;
-    position: relative;
-    margin: 0 12px;
-  }
-
-  .proofs-review-card::before {
-    content: '"';
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 120px;
-    color: rgba(139,92,246,0.14);
-    position: absolute;
-    top: -10px;
-    left: 24px;
-    line-height: 1;
-    pointer-events: none;
-  }
-
-  .proofs-review-stars {
-    color: var(--violet-soft);
-    font-size: 18px;
-    letter-spacing: 2px;
-    margin-bottom: 20px;
-  }
-
-  .proofs-review-text {
-    font-size: clamp(1rem, 2vw, 1.2rem);
-    line-height: 1.75;
-    color: var(--text);
-    font-weight: 300;
-    margin-bottom: 28px;
-  }
-
-  .proofs-review-divider {
-    width: 40px;
-    height: 1px;
-    background: var(--grad);
-    margin-bottom: 16px;
-  }
-
-  .proofs-review-name {
-    font-size: 13px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--violet-soft);
-    font-weight: 600;
-  }
-
-  /* Slick overrides */
-  .proofs-reviews .slick-dots li button:before {
-    color: var(--violet) !important;
-    opacity: 0.3;
-    font-size: 8px;
-  }
-  .proofs-reviews .slick-dots li.slick-active button:before {
-    opacity: 1;
-    color: var(--violet) !important;
-  }
-
-  /* ── GUARANTEE ── */
-  .proofs-guarantee {
-    background: linear-gradient(135deg, rgba(139,92,246,0.14), rgba(34,211,238,0.08));
-    border: 1px solid var(--border);
-    margin: 0 24px 90px;
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
-    padding: 56px 48px;
-    border-radius: 24px;
-    display: flex;
-    align-items: center;
-    gap: 48px;
-    flex-wrap: wrap;
-  }
-
-  .guarantee-icon { font-size: 60px; flex-shrink: 0; }
-
-  .guarantee-text { flex: 1; min-width: 240px; }
-
-  .guarantee-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.7rem;
-    font-weight: 700;
-    margin-bottom: 12px;
-    color: var(--violet-soft);
-  }
-
-  .guarantee-desc {
-    font-size: 15px;
-    color: var(--text-dim);
-    line-height: 1.7;
-    font-weight: 300;
-  }
-
-  /* ── CTA ── */
-  .proofs-final-cta {
-    text-align: center;
-    padding: 80px 24px 100px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .proofs-final-cta::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 50% 60% at 50% 100%, rgba(139,92,246,0.1) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .proofs-cta-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(2rem, 5vw, 3.3rem);
-    font-weight: 700;
-    letter-spacing: -1px;
-    margin-bottom: 16px;
-    line-height: 1.15;
-  }
-
-  .proofs-cta-sub {
-    font-size: 16px;
-    color: var(--text-dim);
-    margin-bottom: 40px;
-    font-weight: 300;
-  }
-
-  .proofs-cta-buttons {
-    display: flex;
-    gap: 14px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--grad);
-    color: #0A0A13;
-    font-weight: 600;
-    font-size: 14.5px;
-    padding: 15px 34px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 32px rgba(139,92,246,0.35);
-  }
-
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 14.5px;
-    padding: 15px 34px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition: all 0.2s;
-  }
-
-  .btn-secondary:hover {
-    background: var(--surface);
-    border-color: rgba(255,255,255,0.2);
-  }
-
-  /* ── ANIMATIONS ── */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes scrollPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  .reveal {
-    opacity: 0;
-    transform: translateY(32px);
-    transition: opacity 0.7s ease, transform 0.7s ease;
-  }
-
-  .reveal.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 768px) {
-    .proofs-stat { min-width: 50%; border-bottom: 1px solid var(--border); }
-    .proofs-review-card { padding: 36px 24px 32px; }
-    .proofs-guarantee { padding: 40px 28px; gap: 24px; }
-    .guarantee-icon { font-size: 44px; }
-  }
-`;
+import React from "react";
+import {
+  LuZap,
+  LuLock,
+  LuBadgeCheck,
+  LuUsers,
+  LuMessageCircle,
+  LuRefreshCw,
+  LuFolderOpen,
+  LuExternalLink,
+  LuShieldCheck,
+  LuArrowRight,
+} from "react-icons/lu";
+import theme from "../theme/theme";
+import { Button, CtaPanel, FeatureGrid, PageHeader, Section, SectionHeader, StatStrip } from "../components/ui";
+import "./ContentPages.css";
 
 const trustCards = [
-  {
-    icon: "⚡",
-    title: "Instant Delivery",
-    desc: "Your subscription is activated within minutes of payment. No waiting, no delays — just instant access.",
-  },
-  {
-    icon: "🔐",
-    title: "100% Secure",
-    desc: "Every transaction is encrypted and protected. Your data and payment are always safe with us.",
-  },
-  {
-    icon: "✅",
-    title: "Verified & Working",
-    desc: "All plans are tested before delivery. We guarantee full Premium access or we make it right.",
-  },
-  {
-    icon: "🤝",
-    title: "50,000+ Traders Served",
-    desc: "Our community trusts us. We've been delivering premium tools to serious traders across India.",
-  },
-  {
-    icon: "💬",
-    title: "24/7 Support",
-    desc: "Got an issue? Our support team responds fast on WhatsApp. You're never left on your own.",
-  },
-  {
-    icon: "🔄",
-    title: "Replacement Guarantee",
-    desc: "If your plan ever stops working, we replace it immediately at no extra cost. Zero risk.",
-  },
-];
-
-const reviews = [
-  {
-    id: 1,
-    name: "Arjun S.",
-    location: "Mumbai",
-    review: "MKR Tools & Softwares delivers! TradingView Premium at this price is unbelievable. Activated in 5 minutes, works perfectly. Been using for 3 months straight.",
-  },
-  {
-    id: 2,
-    name: "Bhavna P.",
-    location: "Pune",
-    review: "I was skeptical at first but the proofs folder convinced me. Placed the order, got access instantly. Charts are smooth and all indicators work. Highly recommend!",
-  },
-  {
-    id: 3,
-    name: "Chris D.",
-    location: "Bangalore",
-    review: "Seamless from purchase to activation. MKR Tools & Softwares is my go-to for TradingView Premium. Way better than paying full price on the official site.",
-  },
-  {
-    id: 4,
-    name: "Divya R.",
-    location: "Delhi",
-    review: "Exceptional support team. Had a small issue and they fixed it within 20 minutes. The 12-month plan is incredible value. Won't go anywhere else.",
-  },
-  {
-    id: 5,
-    name: "Eshan M.",
-    location: "Hyderabad",
-    review: "The value is insane. Full TradingView Premium with all features for a fraction of the cost. Already recommended this to my entire trading group.",
-  },
+  { Icon: LuZap, title: "Instant Delivery", text: "Your subscription is activated within minutes of payment. No waiting, no delays — just instant access." },
+  { Icon: LuLock, title: "100% Secure", text: "Every transaction is encrypted and protected. Your data and payment are always safe with us." },
+  { Icon: LuBadgeCheck, title: "Verified & Working", text: "All plans are tested before delivery. We guarantee full Premium access or we make it right." },
+  { Icon: LuUsers, title: "50,000+ Traders Served", text: "Our community trusts us. We've been delivering premium tools to serious traders across India." },
+  { Icon: LuMessageCircle, title: "24/7 Support", text: "Got an issue? Our support team responds fast on WhatsApp. You're never left on your own." },
+  { Icon: LuRefreshCw, title: "Replacement Guarantee", text: "If your plan ever stops working, we replace it immediately at no extra cost. Zero risk." },
 ];
 
 const stats = [
-  { num: "50K+", label: "Traders Served" },
-  { num: "₹495", label: "Starting Price" },
-  { num: "5 Min", label: "Avg. Delivery" },
-  { num: "100%", label: "Success Rate" },
+  { value: "50K+", label: "Traders Served" },
+  { value: "₹495", label: "Starting Price" },
+  { value: "5 Min", label: "Avg. Delivery" },
+  { value: "100%", label: "Success Rate" },
 ];
 
-const proofsDriveUrl =
-  "https://drive.google.com/drive/folders/1EtOpaPTbV4qopeA3LNUciVcGcwdkS8Po?usp=sharing";
+const proofsDriveUrl = "https://drive.google.com/drive/folders/1EtOpaPTbV4qopeA3LNUciVcGcwdkS8Po?usp=sharing";
 
-const Proofs = () => {
-  const revealRefs = useRef([]);
+const externalProps = { target: "_blank", rel: "noopener noreferrer" };
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("visible");
-            observer.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.12 }
-    );
-
-    revealRefs.current.forEach((el) => el && observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
-
-  const addRef = (el) => {
-    if (el && !revealRefs.current.includes(el)) revealRefs.current.push(el);
-  };
-
-  const sliderSettings = {
-    dots: true,
-    infinite: true,
-    speed: 800,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    autoplay: true,
-    autoplaySpeed: 5000,
-    arrows: false,
-  };
-
-  return (
-    <>
-      <style>{style}</style>
-      <div className="proofs-root">
-
-        {/* ── HERO ── */}
-        <section className="proofs-hero">
-          <div className="proofs-hero-badge">
-            <span>✦</span> Verified by 50,000+ traders <span>✦</span>
-          </div>
-          <h1 className="proofs-hero-title">
-            Don't Take Our Word.
-            <em>See the Proof.</em>
-          </h1>
-          <p className="proofs-hero-sub">
-            Real screenshots. Real traders. Real results. Every claim we make is backed by verifiable evidence — openly shared for you to inspect.
-          </p>
-          <a href={proofsDriveUrl} target="_blank" rel="noopener noreferrer" className="proofs-hero-cta">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/></svg>
-            View All Proofs on Drive
-          </a>
-          <div className="proofs-scroll-line">
-            <span>Scroll</span>
-            <div className="proofs-scroll-bar" />
-          </div>
-        </section>
-
-        {/* ── STATS ── */}
-        <div className="proofs-stats" ref={addRef}>
-          {stats.map((s) => (
-            <div className="proofs-stat" key={s.label}>
-              <div className="proofs-stat-num">{s.num}</div>
-              <div className="proofs-stat-label">{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── TRUST CARDS ── */}
-        <section className="proofs-trust">
-          <div ref={addRef} className="reveal">
-            <p className="proofs-section-eyebrow">Why Traders Choose Us</p>
-            <h2 className="proofs-section-heading">Built on Trust.<br />Backed by Results.</h2>
-          </div>
-          <div className="proofs-trust-grid reveal" ref={addRef}>
-            {trustCards.map((card) => (
-              <div className="proofs-trust-card" key={card.title}>
-                <span className="trust-icon">{card.icon}</span>
-                <div className="trust-title">{card.title}</div>
-                <div className="trust-desc">{card.desc}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── DRIVE PROOF SECTION ── */}
-        <section className="proofs-drive-section">
-          <div className="proofs-drive-inner reveal" ref={addRef}>
-            <span className="proofs-drive-icon">📂</span>
-            <h2 className="proofs-drive-title">
-              Our Proof Folder is Public & Open
-            </h2>
-            <p className="proofs-drive-desc">
-              We have nothing to hide. Browse real screenshots of successful deliveries, activated accounts, and happy customer confirmations — all stored in our public Google Drive. Updated regularly.
-            </p>
-            <a href={proofsDriveUrl} target="_blank" rel="noopener noreferrer" className="proofs-drive-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/></svg>
-              Open Proof Folder
-            </a>
-          </div>
-        </section>
-
-        {/* ── REVIEWS ── */}
-        <section className="proofs-reviews">
-          <div ref={addRef} className="reveal" style={{ textAlign: 'center', marginBottom: 48 }}>
-            <p className="proofs-section-eyebrow">Client Testimonials</p>
-            <h2 className="proofs-section-heading">What Our Traders Say</h2>
-          </div>
-          <div className="reveal" ref={addRef}>
-            <Slider {...sliderSettings}>
-              {reviews.map((r) => (
-                <div key={r.id}>
-                  <div className="proofs-review-card">
-                    <div className="proofs-review-stars">★★★★★</div>
-                    <p className="proofs-review-text">{r.review}</p>
-                    <div className="proofs-review-divider" />
-                    <p className="proofs-review-name">{r.name} — {r.location}</p>
-                  </div>
-                </div>
-              ))}
-            </Slider>
-          </div>
-        </section>
-
-        {/* ── GUARANTEE ── */}
-        <div className="proofs-guarantee reveal" ref={addRef}>
-          <div className="guarantee-icon">🛡️</div>
-          <div className="guarantee-text">
-            <div className="guarantee-title">Our Zero-Risk Guarantee</div>
-            <p className="guarantee-desc">
-              If your TradingView Premium plan ever stops working during your subscription period, we will replace it immediately at no cost. No questions asked. We stand behind every order we fulfil — your investment is 100% protected.
-            </p>
-          </div>
-        </div>
-
-        {/* ── FINAL CTA ── */}
-        <section className="proofs-final-cta">
-          <div ref={addRef} className="reveal">
-            <h2 className="proofs-cta-title">
-              Ready to Trade Like a Pro?
-            </h2>
-            <p className="proofs-cta-sub">
-              Join 50,000+ traders already using TradingView Premium through MKR Tools & Softwares.
-            </p>
-            <div className="proofs-cta-buttons">
-              <a href="/products" className="btn-primary">
-                View Plans from ₹495
-              </a>
-              <a href={proofsDriveUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary">
-                Browse Proofs First
-              </a>
-            </div>
-          </div>
-        </section>
-
+const Proofs = () => (
+  <div className="content-page">
+    <PageHeader
+      eyebrow="Verified by 50,000+ traders"
+      title="Don't take our word. See the proof."
+      description="Real screenshots. Real traders. Real results. Every claim we make is backed by verifiable evidence — openly shared for you to inspect."
+    >
+      <div className="content-page__header-actions">
+        <Button href={proofsDriveUrl} {...externalProps} variant="primary" size="lg" icon={<LuExternalLink />}>
+          View all proofs on Drive
+        </Button>
       </div>
-    </>
-  );
-};
+    </PageHeader>
+
+    <Section>
+      <StatStrip items={stats} />
+    </Section>
+
+    <Section>
+      <SectionHeader eyebrow="Why traders choose us" title="Built on trust. Backed by results." />
+      <FeatureGrid items={trustCards} columns={3} />
+    </Section>
+
+    <Section>
+      <div className="ui-card proofs-drive">
+        <span className="ui-icon-tile proofs-drive__icon">
+          <LuFolderOpen aria-hidden="true" />
+        </span>
+        <div className="proofs-drive__text">
+          <h2 className="ui-title-section">Our proof folder is public &amp; open</h2>
+          <p className="ui-muted">
+            We have nothing to hide. Browse real screenshots of successful deliveries, activated accounts, and happy
+            customer confirmations — all stored in our public Google Drive. Updated regularly.
+          </p>
+        </div>
+        <Button href={proofsDriveUrl} {...externalProps} variant="secondary" size="lg" icon={<LuFolderOpen />}>
+          Open proof folder
+        </Button>
+      </div>
+    </Section>
+
+    <Section narrow>
+      <div className="proofs-guarantee">
+        <LuShieldCheck aria-hidden="true" />
+        <div>
+          <h2 className="ui-title-card">Our zero-risk guarantee</h2>
+          <p className="ui-muted ui-small">
+            If your TradingView Premium plan ever stops working during your subscription period, we will replace it
+            immediately at no cost. No questions asked. We stand behind every order we fulfil — your investment is 100%
+            protected.
+          </p>
+        </div>
+      </div>
+    </Section>
+
+    <Section>
+      <CtaPanel
+        title="Ready to trade like a pro?"
+        text={`Join 50,000+ traders already using TradingView Premium through ${theme.brand.name}.`}
+        actions={
+          <>
+            <Button to="/" variant="primary" size="lg" iconRight={<LuArrowRight />}>
+              View plans from ₹495
+            </Button>
+            <Button href={proofsDriveUrl} {...externalProps} variant="secondary" size="lg">
+              Browse proofs first
+            </Button>
+          </>
+        }
+      />
+    </Section>
+  </div>
+);
 
 export default Proofs;

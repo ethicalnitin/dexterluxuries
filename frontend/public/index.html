@@ -3,14 +3,17 @@
   <head>
 
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <!-- Static defaults for before JS loads. At runtime src/theme/theme.js
+         is the source of truth (applyTheme sets favicon, theme-color, title). -->
+    <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon-64.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#090B10" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="MKR Tools & Softwares — premium digital subscriptions and tools. Smart tools. Better solutions."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <style>html,body{background:#090B10;color-scheme:dark}</style>
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
