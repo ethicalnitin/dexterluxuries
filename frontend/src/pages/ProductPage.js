@@ -627,7 +627,7 @@ const ProductPage = () => {
       return;
     }
 
-    const fetchProduct = async () => {
+    const fetchProduct = async () => { 
       try {
         const apiBase = process.env.REACT_APP_API_BASE || "https://dexterluxuries-production.up.railway.app/api";
         const response = await fetch(`${apiBase}/products/${id}`);
