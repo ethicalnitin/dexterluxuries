@@ -8,8 +8,9 @@ if (!PEPPER) {
 }
 
 function generateOtp() {
-  // 6-digit numeric code, zero-padded (e.g. "004821")
-  return String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+  // 6-digit numeric code, zero-padded (e.g. "004821"). crypto.randomInt rather
+  // than Math.random because these codes can reset a password.
+  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
 }
 
 function hashOtp(code) {

@@ -214,7 +214,8 @@ app.get('/health', (req, res) => {
 // Product routes
 app.use('/api/products', productRoutes);
 
-// Auth routes — email + OTP, no passwords. See routes/authRoutes.js.
+// Auth routes — email + password sign-up/login, emailed-code password reset.
+// See routes/authRoutes.js.
 app.use('/api/auth', authRoutes);
 
 // POST /api/orders/notify — order intent (contact details + chosen payment

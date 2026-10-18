@@ -1,267 +1,108 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link } from "react-router-dom";
+import { FaInstagram, FaFacebook, FaTelegram } from "react-icons/fa6";
+import theme from "../theme/theme";
+import "./layout.css";
 
-const style = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@300;400;500&display=swap');
+// Social and contact destinations are kept exactly as they were.
+const socials = [
+  { label: "Instagram", href: "https://www.instagram.com/chartvault.store_official", Icon: FaInstagram },
+  { label: "Facebook", href: "https://www.facebook.com/", Icon: FaFacebook },
+  { label: "Telegram", href: "https://t.me/aasarambapu", Icon: FaTelegram },
+];
 
-  :root {
-    --ft-bg: #05050A;
-    --ft-border: rgba(255,255,255,0.09);
-    --ft-violet: #8B5CF6;
-    --ft-cyan: #22D3EE;
-    --ft-text: #F4F2FF;
-    --ft-text-dim: rgba(244,242,255,0.55);
-    --ft-text-faint: rgba(244,242,255,0.3);
-    --ft-grad: linear-gradient(92deg, #8B5CF6 0%, #22D3EE 100%);
-  }
+const navigation = [
+  { label: "Home", to: "/" },
+  { label: "About Us", to: "/about" },
+  { label: "Contact Us", to: "/contact" },
+  { label: "Proofs & Vouches", to: "/proofs" },
+];
 
-  .footer-root {
-    background: var(--ft-bg);
-    color: var(--ft-text);
-    font-family: 'Inter', sans-serif;
-    border-top: 1px solid var(--ft-border);
-  }
-
-  .footer-top {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 64px 32px 48px;
-    display: grid;
-    grid-template-columns: 1.6fr 1fr 1fr;
-    gap: 48px;
-  }
-
-  .footer-brand-name {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.4rem;
-    font-weight: 700;
-    background: var(--ft-grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    margin-bottom: 14px;
-    letter-spacing: -0.3px;
-  }
-
-  .footer-brand-desc {
-    font-size: 14px;
-    color: var(--ft-text-dim);
-    line-height: 1.75;
-    font-weight: 300;
-    max-width: 280px;
-    margin-bottom: 28px;
-  }
-
-  .footer-socials {
-    display: flex;
-    gap: 12px;
-  }
-
-  .footer-social-link {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    border: 1px solid var(--ft-border);
-    background: rgba(255,255,255,0.03);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--ft-text-dim);
-    font-size: 15px;
-    text-decoration: none;
-    transition: all 0.2s;
-  }
-
-  .footer-social-link:hover {
-    border-color: rgba(139,92,246,0.5);
-    color: #C4B5FD;
-    background: rgba(139,92,246,0.1);
-    transform: translateY(-2px);
-  }
-
-  .footer-col-title {
-    font-size: 10px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: #C4B5FD;
-    font-weight: 600;
-    margin-bottom: 24px;
-  }
-
-  .footer-links {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .footer-links a {
-    font-size: 14px;
-    color: var(--ft-text-dim);
-    text-decoration: none;
-    font-weight: 300;
-    transition: color 0.2s, padding-left 0.2s;
-    display: inline-block;
-  }
-
-  .footer-links a:hover {
-    color: #C4B5FD;
-    padding-left: 4px;
-  }
-
-  .footer-contact-item {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-bottom: 18px;
-  }
-
-  .footer-contact-label {
-    font-size: 10px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--ft-text-faint);
-    font-weight: 500;
-  }
-
-  .footer-contact-value {
-    font-size: 14px;
-    color: rgba(244,242,255,0.7);
-    font-weight: 300;
-    text-decoration: none;
-    transition: color 0.2s;
-  }
-
-  .footer-contact-value:hover { color: #C4B5FD; }
-
-  .footer-divider {
-    border: none;
-    border-top: 1px solid var(--ft-border);
-    margin: 0;
-  }
-
-  .footer-bottom {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .footer-copy {
-    font-size: 12px;
-    color: var(--ft-text-faint);
-    font-weight: 300;
-    letter-spacing: 0.3px;
-  }
-
-  .footer-copy span { color: #C4B5FD; }
-
-  .footer-bottom-links {
-    display: flex;
-    gap: 24px;
-  }
-
-  .footer-bottom-links a {
-    font-size: 12px;
-    color: var(--ft-text-faint);
-    text-decoration: none;
-    transition: color 0.2s;
-    font-weight: 300;
-  }
-
-  .footer-bottom-links a:hover { color: #C4B5FD; }
-
-  @media (max-width: 768px) {
-    .footer-top {
-      grid-template-columns: 1fr 1fr;
-      gap: 40px;
-    }
-
-    .footer-brand { grid-column: 1 / -1; }
-    .footer-brand-desc { max-width: 100%; }
-
-    .footer-bottom {
-      flex-direction: column;
-      text-align: center;
-    }
-
-    .footer-bottom-links { justify-content: center; flex-wrap: wrap; gap: 16px; }
-  }
-
-  @media (max-width: 480px) {
-    .footer-top { grid-template-columns: 1fr; }
-  }
-`;
+const legal = [
+  { label: "Refund Policy", to: "/refund-policy" },
+  { label: "Privacy Policy", to: "/privacy-policy" },
+];
 
 export const Footer = () => {
+  const { brand } = theme;
+  const year = new Date().getFullYear();
+
   return (
-    <>
-      <style>{style}</style>
-      <footer className="footer-root">
-        <div className="footer-top">
-          <div className="footer-brand">
-            <div className="footer-brand-name">MKR Tools & Softwares</div>
-            <p className="footer-brand-desc">
-              India's trusted digital product store since 2021. Serving 50,000+ traders and enthusiasts with premium subscriptions at unbeatable prices.
-            </p>
-            <div className="footer-socials">
-              <a href="https://www.instagram.com/chartvault.store_official" target="_blank" rel="noopener noreferrer" className="footer-social-link" aria-label="Instagram">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-              </a>
-              <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" className="footer-social-link" aria-label="Facebook">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-              </a>
-              <a href="https://t.me/aasarambapu" target="_blank" rel="noopener noreferrer" className="footer-social-link" aria-label="Telegram">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-              </a>
+    <footer className="site-footer">
+      <div className="ui-container">
+        <div className="site-footer__grid">
+          <div className="site-footer__brand">
+            <Link to="/" className="site-brand">
+              <img src={brand.logo} alt="" className="site-brand__logo" width="36" height="36" />
+              <span className="site-brand__name site-brand__name--full">{brand.name}</span>
+            </Link>
+            <p className="site-footer__desc">{brand.description}</p>
+            <div className="site-footer__socials">
+              {socials.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="site-footer__social"
+                  aria-label={label}
+                >
+                  <Icon aria-hidden="true" />
+                </a>
+              ))}
             </div>
           </div>
 
           <div>
-            <p className="footer-col-title">Navigation</p>
-            <ul className="footer-links">
-              <li><Link to="/">Home</Link></li>
-              <li><Link to="/about">About Us</Link></li>
-              <li><Link to="/contact">Contact Us</Link></li>
-          
-              <li><Link to="/Proofs">Proofs & Vouches</Link></li>
+            <h2 className="site-footer__title">Navigation</h2>
+            <ul className="site-footer__links">
+              {navigation.map((l) => (
+                <li key={l.to}>
+                  <Link to={l.to}>{l.label}</Link>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div>
-            <p className="footer-col-title">Legal & Contact</p>
-            <ul className="footer-links">
-              <li><Link to="/refund-policy">Refund Policy</Link></li>
-              <li><Link to="/privacy-policy">Privacy Policy</Link></li>
+            <h2 className="site-footer__title">Legal</h2>
+            <ul className="site-footer__links">
+              {legal.map((l) => (
+                <li key={l.to}>
+                  <Link to={l.to}>{l.label}</Link>
+                </li>
+              ))}
             </ul>
-            <div style={{ marginTop: 28 }}>
-              <div className="footer-contact-item">
-                <span className="footer-contact-label">Email</span>
-                <a href="mailto:leader@cybermafia.shop" className="footer-contact-value">leader@cybermafia.shop</a>
+          </div>
+
+          <div>
+            <h2 className="site-footer__title">Contact</h2>
+            <dl className="site-footer__contact">
+              <div>
+                <dt>Email</dt>
+                <dd>
+                  <a href="mailto:leader@cybermafia.shop">leader@cybermafia.shop</a>
+                </dd>
               </div>
-              <div className="footer-contact-item">
-                <span className="footer-contact-label">Telegram</span>
-                <a href="https://t.me/aasarambapu" target="_blank" rel="noopener noreferrer" className="footer-contact-value">@mkrtoolsandsoftwares</a>
+              <div>
+                <dt>Telegram</dt>
+                <dd>
+                  <a href="https://t.me/aasarambapu" target="_blank" rel="noopener noreferrer">
+                    @mkrtoolsandsoftwares
+                  </a>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
         </div>
 
-        <hr className="footer-divider" />
-
-        <div className="footer-bottom">
-          <p className="footer-copy">© 2021–2025 <span>MKR Tools & Softwares</span>. All Rights Reserved.</p>
-          <div className="footer-bottom-links">
-            <Link to="/privacy-policy">Privacy Policy</Link>
-            <Link to="/refund-policy">Refund Policy</Link>
-            <Link to="/about">About</Link>
-          </div>
+        <div className="site-footer__bottom">
+          <p>
+            © {brand.foundedYear}–{year} {brand.name}. All rights reserved.
+          </p>
+          <p className="site-footer__tagline">{brand.tagline}</p>
         </div>
-      </footer>
-    </>
+      </div>
+    </footer>
   );
 };
