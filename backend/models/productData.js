@@ -1,14 +1,13 @@
 const mongoose = require('mongoose');
 
-// Sub-schema for a single pricing plan
 const planSchema = new mongoose.Schema(
     {
         name: {
-            type: String,       // e.g. "3 Months", "6 Months", "Lifetime"
+            type: String,
             required: true,
         },
         durationInMonths: {
-            type: Number,       // use null or 0 for "lifetime"
+            type: Number,
         },
         price: {
             type: Number,
@@ -22,16 +21,16 @@ const planSchema = new mongoose.Schema(
             default: true,
         },
     },
-    { _id: false } // set to true if you want each plan to have its own _id
+    { _id: false }
 );
 
 const productSchema = new mongoose.Schema(
     {
-        id: Number,
+        id: { type: Number, index: true },
         category: String,
         name: String,
         brand: {
-            type: String,        // simplest option — just store brand name
+            type: String,
             required: true,
         },
         image: String,

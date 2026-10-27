@@ -3,8 +3,8 @@
   "short_name": "Dexter",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#090B10",
-  "theme_color": "#090B10",
+  "background_color": "#F6F4EF",
+  "theme_color": "#F6F4EF",
   "icons": [
     {
       "src": "/logo192.png",

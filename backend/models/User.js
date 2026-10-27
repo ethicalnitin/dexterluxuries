@@ -10,17 +10,21 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-    // `select: false` keeps the hash out of every query result unless a route
-    // explicitly asks for it with .select("+passwordHash").
-    // Accounts created by the old email-code login have no password yet; they
-    // set one through "Forgot password".
     passwordHash: { type: String, select: false },
-    // Tokens issued before this moment are rejected (see middleware/auth.js),
-    // so resetting a password signs the account out everywhere else.
     passwordChangedAt: { type: Date },
     lastLoginAt: { type: Date },
+    role: { type: String, enum: ["customer", "admin"], default: "customer" },
   },
   { timestamps: true }
 );
+
+userSchema.methods.toPublic = function toPublic() {
+  return {
+    id: this._id.toString(),
+    name: this.name || "",
+    email: this.email,
+    role: this.role === "admin" ? "admin" : "customer",
+  };
+};
 
 module.exports = mongoose.model("User", userSchema);

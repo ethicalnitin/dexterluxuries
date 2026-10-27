@@ -1,15 +1,11 @@
 import React, { useRef } from "react";
 import { Badge, Price } from "../ui";
-import { formatPlanDuration, getPlanPricing, isPlanAvailable } from "../../utils/pricing";
+import { bestValuePlanIndex, formatPlanDuration, formatUSD, getPlanPricing, isPlanAvailable, monthlyPrice } from "../../utils/pricing";
 import "./store.css";
 
-/**
- * Plan picker for multi-plan products. Radio-group semantics with arrow-key
- * support; sold-out plans are shown but can't be selected. The last plan
- * gets the "Best value" tag, as before.
- */
 export default function PlanSelector({ plans, selectedIndex, onSelect, label = "Choose your plan" }) {
   const optionRefs = useRef([]);
+  const bestValue = bestValuePlanIndex(plans);
 
   const move = (from, step) => {
     for (let i = 1; i <= plans.length; i++) {
@@ -19,7 +15,6 @@ export default function PlanSelector({ plans, selectedIndex, onSelect, label = "
     return from;
   };
 
-  // Roving focus: arrow keys select the next in-stock plan and move focus to it.
   const onKeyDown = (e, idx) => {
     let next = null;
     if (e.key === "ArrowDown" || e.key === "ArrowRight") next = move(idx, 1);
@@ -40,6 +35,7 @@ export default function PlanSelector({ plans, selectedIndex, onSelect, label = "
           const isActive = selectedIndex === idx;
           const available = isPlanAvailable(plan);
           const { price, strike } = getPlanPricing(plan);
+          const perMonth = monthlyPrice(plan);
           return (
             <button
               key={`${plan.name}-${idx}`}
@@ -54,13 +50,18 @@ export default function PlanSelector({ plans, selectedIndex, onSelect, label = "
               onKeyDown={(e) => onKeyDown(e, idx)}
             >
               <span className="plan-option__radio" aria-hidden="true" />
-              <span className="plan-option__name">{formatPlanDuration(plan)}</span>
-              {!available ? (
-                <Badge variant="danger">Out of stock</Badge>
-              ) : idx === plans.length - 1 ? (
-                <Badge variant="primary">Best value</Badge>
-              ) : null}
-              <Price amount={price} strike={strike} size="sm" className="plan-option__price" />
+              <span className="plan-option__main">
+                <span className="plan-option__name">{formatPlanDuration(plan)}</span>
+                {!available ? (
+                  <Badge variant="danger">Out of stock</Badge>
+                ) : idx === bestValue ? (
+                  <span className="plan-option__value">Best value</span>
+                ) : null}
+              </span>
+              <span className="plan-option__aside">
+                <Price amount={price} strike={strike} size="sm" className="plan-option__price" />
+                {perMonth !== null && available && <span className="plan-option__monthly">{formatUSD(perMonth)}/month</span>}
+              </span>
             </button>
           );
         })}

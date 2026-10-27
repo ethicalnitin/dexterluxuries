@@ -1,13 +1,3 @@
-/* ============================================================
-   Turns theme.js into CSS variables on <html>, loads the fonts,
-   and sets the favicon / browser theme colour. Called once from
-   index.js before React renders, so the first paint is themed.
-
-   You shouldn't need to edit this file to restyle the store —
-   change theme.js instead.
-============================================================ */
-
-// theme group -> CSS variable prefix
 const PREFIXES = {
   colors: "color",
   fonts: "font",
@@ -34,7 +24,6 @@ function hexToRgb(hex) {
 
 const rgba = (hex, alpha) => `rgba(${hexToRgb(hex).join(", ")}, ${alpha})`;
 
-// Linear blend of two hex colours; amount 0 = a, 1 = b.
 function mix(a, b, amount) {
   const ca = hexToRgb(a);
   const cb = hexToRgb(b);
@@ -42,19 +31,18 @@ function mix(a, b, amount) {
   return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
-// Hover/pressed shades and translucent tints, derived from the base
-// colours so they follow automatically when a base colour changes.
 function derivedColors(c) {
   const vars = {
-    "--color-primary-hover": mix(c.primary, "#FFFFFF", 0.12),
-    "--color-primary-active": mix(c.primary, "#000000", 0.12),
-    "--color-primary-soft": rgba(c.primary, 0.14),
-    "--color-primary-border": rgba(c.primary, 0.55),
-    "--color-accent-soft": rgba(c.accent, 0.12),
-    "--color-focus-ring": rgba(c.accent, 0.55),
-    "--color-surface-hover": mix(c.surface, "#FFFFFF", 0.035),
-    "--color-header-bg": rgba(c.background, 0.86),
-    "--color-overlay": rgba(c.background, 0.8),
+    "--color-primary-hover": mix(c.primary, "#000000", 0.18),
+    "--color-primary-active": mix(c.primary, "#000000", 0.3),
+    "--color-primary-soft": rgba(c.primary, 0.07),
+    "--color-primary-border": rgba(c.primary, 0.35),
+    "--color-accent-soft": rgba(c.accent, 0.08),
+    "--color-focus-ring": rgba(c.accent, 0.45),
+    "--color-surface-hover": mix(c.background, "#FFFFFF", 0.35),
+    "--color-header-bg": c.surface,
+    "--color-overlay": rgba(c.text, 0.45),
+    "--color-highlight-soft": rgba(c.highlight, 0.22),
     "--color-whatsapp-hover": mix(c.whatsapp, "#000000", 0.12),
   };
   ["success", "warning", "danger"].forEach((name) => {
@@ -74,7 +62,6 @@ export function themeToCssVars(theme) {
     });
   });
 
-  // components.button.height -> --button-height
   Object.entries(theme.components || {}).forEach(([component, settings]) => {
     Object.entries(settings).forEach(([key, value]) => {
       vars[`--${kebab(component)}-${kebab(key)}`] = String(value);

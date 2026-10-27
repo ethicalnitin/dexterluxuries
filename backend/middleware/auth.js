@@ -1,11 +1,9 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const { config } = require("../config/env");
+const { logger } = require("../utils/logger");
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
-// Protects a route: rejects with 401 if there's no valid "Authorization:
-// Bearer <token>" header, otherwise attaches { id, name, email } to req.user.
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : null;
@@ -16,8 +14,8 @@ async function requireAuth(req, res, next) {
 
   let payload;
   try {
-    payload = jwt.verify(token, JWT_SECRET);
-  } catch (err) {
+    payload = jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] });
+  } catch {
     return res.status(401).json({ error: "Your session has expired. Sign in again." });
   }
 
@@ -26,17 +24,23 @@ async function requireAuth(req, res, next) {
     if (!user) {
       return res.status(401).json({ error: "Your session has expired. Sign in again." });
     }
-    // iat is in whole seconds, so compare at that resolution.
     if (user.passwordChangedAt && payload.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) {
       return res.status(401).json({ error: "Your password was changed. Sign in again." });
     }
 
-    req.user = { id: user._id.toString(), name: user.name || "", email: user.email };
+    req.user = user.toPublic();
     next();
   } catch (err) {
-    console.error("[Auth] requireAuth error:", err.message);
+    logger.error("requireAuth failed", { requestId: req.id, err });
     res.status(500).json({ error: "Something went wrong. Try again." });
   }
 }
 
-module.exports = { requireAuth };
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ error: "You don't have permission to do that." });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin };

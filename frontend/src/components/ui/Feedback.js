@@ -1,9 +1,6 @@
 import React from "react";
 import { LuInfo, LuCheckCircle2, LuAlertTriangle, LuAlertCircle } from "react-icons/lu";
 
-/* Badges, alerts, spinners and full-section status messages. */
-
-// variant: neutral | primary | success | warning | danger
 export function Badge({ variant = "neutral", icon = null, className = "", children }) {
   const variantClass = variant === "neutral" ? "" : ` ui-badge--${variant}`;
   return (
@@ -21,7 +18,6 @@ const ALERT_ICONS = {
   danger: LuAlertCircle,
 };
 
-// variant: info | success | warning | danger
 export function Alert({ variant = "info", className = "", children, ...rest }) {
   const Icon = ALERT_ICONS[variant] || LuInfo;
   const role = variant === "danger" || variant === "warning" ? "alert" : "status";
@@ -37,11 +33,6 @@ export function Spinner({ className = "", label }) {
   return <span className={`ui-spinner ${className}`} role={label ? "status" : undefined} aria-label={label} />;
 }
 
-/**
- * Centred message for loading, empty and error states of a page or section.
- *   <StatusMessage loading title="Loading products…" />
- *   <StatusMessage icon={<LuPackage />} title="Nothing here yet" text="…" action={<Button …/>} />
- */
 export function StatusMessage({ loading = false, icon = null, title, text, action = null, className = "" }) {
   return (
     <div className={`ui-state ${className}`} role={loading ? "status" : undefined} aria-live={loading ? "polite" : undefined}>

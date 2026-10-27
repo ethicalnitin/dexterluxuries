@@ -1,0 +1,163 @@
+.checkout-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-self: start;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.checkout-back:hover {
+  color: var(--color-text);
+}
+
+.checkout-back svg {
+  width: 16px;
+  height: 16px;
+}
+
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: clamp(20px, 3vw, 32px);
+}
+
+.checkout-panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--card-padding);
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface);
+}
+
+.checkout-panel__title {
+  font-size: var(--text-lg);
+}
+
+.checkout-lines {
+  display: grid;
+}
+
+.checkout-line {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+
+.checkout-line + .checkout-line {
+  border-top: 1px solid var(--color-border);
+}
+
+.checkout-line__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.checkout-line__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.checkout-line__thumb .product-image-fallback {
+  width: 100%;
+  border-radius: 0;
+  font-size: var(--text-sm);
+}
+
+.checkout-line__info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.checkout-line__info strong {
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.checkout-line__problem {
+  color: var(--color-danger);
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-line--blocked .checkout-line__thumb img {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.checkout-line__total {
+  color: var(--color-text);
+  font-weight: var(--weight-bold);
+}
+
+.checkout-summary {
+  position: sticky;
+  top: calc(var(--layout-header-height) + var(--space-5));
+}
+
+.checkout-summary__rows {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.checkout-summary__rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.checkout-summary__rows dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-summary__total {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.checkout-summary__total dt {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-summary__total dd {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold) !important;
+}
+
+.checkout-summary__note {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 899px) {
+  .checkout-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checkout-summary {
+    position: static;
+  }
+}

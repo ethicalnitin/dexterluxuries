@@ -1,15 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-/**
- * Button — renders a <button>, a router <Link> (`to`) or an <a> (`href`).
- *
- *   <Button variant="primary" size="lg" block loading={saving}>Save</Button>
- *   <Button to="/contact" variant="secondary">Contact</Button>
- *
- * variant: primary | secondary | ghost | danger | success | whatsapp
- * size:    sm | md | lg
- */
 const Button = React.forwardRef(function Button(
   {
     variant = "secondary",

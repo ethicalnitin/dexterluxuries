@@ -1,49 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import LoginModal from "./LoginModal";
-
-/* ============================================================
-   AUTH CONTEXT — email + password accounts.
-
-   <AuthProvider> wraps the app once (see App.js) and renders the
-   login / sign-up modal itself. Anywhere in the app:
-
-     const { user, isAuthenticated, openLogin, openSignup, logout } = useAuth();
-
-   To gate an action behind login (e.g. a "Buy now" button):
-
-     const { requireAuth } = useAuth();
-     requireAuth(() => startCheckout(product)); // runs once signed in
-
-   For an API route protected by requireAuth on the backend, send
-   the token:
-
-     const { token } = useAuth();
-     fetch(`${API_BASE}/something`, { headers: { Authorization: `Bearer ${token}` } });
-============================================================ */
+import { apiRequest } from "../config/api";
 
 const AuthContext = createContext(null);
 
 const STORAGE_TOKEN_KEY = "cv_auth_token";
 const STORAGE_USER_KEY = "cv_auth_user";
-// Same convention as ProductPage.js. For local dev, put
-// REACT_APP_API_BASE=http://localhost:3046/api in frontend/.env.local
-const API_BASE =process.env.REACT_APP_API_BASE || "http://localhost:3046/api";
 
-async function postJson(path, body, fallbackError) {
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error("Can't reach the server. Check your connection and try again.");
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || fallbackError);
-  return data;
-}
+const postJson = (path, body, fallbackError) => apiRequest(path, { method: "POST", body, fallbackError });
 
 function readStoredSession() {
   try {
@@ -51,15 +15,15 @@ function readStoredSession() {
     const user = JSON.parse(localStorage.getItem(STORAGE_USER_KEY) || "null");
     return token && user ? { token, user } : null;
   } catch {
-    return null; // private browsing, or corrupted JSON
+    return null;
   }
 }
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [isReady, setIsReady] = useState(false); // true once the initial session check has finished
-  const [modalView, setModalView] = useState(null); // null (closed) | 'login' | 'signup' | 'forgot'
+  const [isReady, setIsReady] = useState(false);
+  const [modalView, setModalView] = useState(null);
   const pendingActionRef = useRef(null);
 
   const persistSession = useCallback((nextToken, nextUser) => {
@@ -69,7 +33,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem(STORAGE_TOKEN_KEY, nextToken);
       localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(nextUser));
     } catch {
-      // e.g. private browsing — session still works for this tab
     }
   }, []);
 
@@ -80,13 +43,9 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem(STORAGE_TOKEN_KEY);
       localStorage.removeItem(STORAGE_USER_KEY);
     } catch {
-      // ignore
     }
   }, []);
 
-  // On first load: show the stored session straight away, then confirm with
-  // the server that the token is still valid. Only a 401 signs the user out —
-  // a network error or a sleeping server shouldn't log anyone out.
   useEffect(() => {
     const stored = readStoredSession();
     if (!stored) {
@@ -97,19 +56,13 @@ export const AuthProvider = ({ children }) => {
     setUser(stored.user);
 
     let cancelled = false;
-    fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${stored.token}` } })
-      .then(async (res) => {
-        if (cancelled) return;
-        if (res.status === 401) {
-          clearSession();
-          return;
-        }
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled && data.user) persistSession(stored.token, data.user);
-        }
+    apiRequest("/auth/me", { token: stored.token })
+      .then((data) => {
+        if (!cancelled && data.user) persistSession(stored.token, data.user);
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (!cancelled && err.status === 401) clearSession();
+      })
       .finally(() => {
         if (!cancelled) setIsReady(true);
       });
@@ -119,7 +72,6 @@ export const AuthProvider = ({ children }) => {
     };
   }, [clearSession, persistSession]);
 
-  // Keep tabs in sync: logging in or out in one tab updates the others.
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key !== STORAGE_TOKEN_KEY && e.key !== STORAGE_USER_KEY) return;
@@ -131,12 +83,10 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Called after any successful login / sign-up / reset.
   const completeAuth = useCallback(
     (data) => {
       persistSession(data.token, data.user);
       setModalView(null);
-      // Run whatever action was waiting on login (e.g. "Buy now").
       if (pendingActionRef.current) {
         const action = pendingActionRef.current;
         pendingActionRef.current = null;
@@ -175,6 +125,18 @@ export const AuthProvider = ({ children }) => {
     clearSession();
   }, [clearSession]);
 
+  const authRequest = useCallback(
+    async (path, options = {}) => {
+      try {
+        return await apiRequest(path, { ...options, token });
+      } catch (err) {
+        if (err.status === 401) clearSession();
+        throw err;
+      }
+    },
+    [token, clearSession]
+  );
+
   const openLogin = useCallback(() => {
     pendingActionRef.current = null;
     setModalView("login");
@@ -190,7 +152,6 @@ export const AuthProvider = ({ children }) => {
     setModalView(null);
   }, []);
 
-  // The main entry point for gating actions behind login (see file header).
   const requireAuth = useCallback(
     (action) => {
       if (user) {
@@ -203,21 +164,26 @@ export const AuthProvider = ({ children }) => {
     [user]
   );
 
-  const value = {
-    user,
-    token,
-    isAuthenticated: Boolean(user),
-    isReady,
-    signup,
-    login,
-    requestPasswordReset,
-    resetPassword,
-    logout,
-    openLogin,
-    openSignup,
-    closeLogin,
-    requireAuth,
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: Boolean(user),
+      isAdmin: user?.role === "admin",
+      isReady,
+      signup,
+      login,
+      requestPasswordReset,
+      resetPassword,
+      logout,
+      authRequest,
+      openLogin,
+      openSignup,
+      closeLogin,
+      requireAuth,
+    }),
+    [user, token, isReady, signup, login, requestPasswordReset, resetPassword, logout, authRequest, openLogin, openSignup, closeLogin, requireAuth]
+  );
 
   return (
     <AuthContext.Provider value={value}>

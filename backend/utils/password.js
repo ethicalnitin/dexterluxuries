@@ -4,8 +4,6 @@ const { promisify } = require("util");
 const scrypt = promisify(crypto.scrypt);
 const KEY_LENGTH = 64;
 
-// Uses Node's built-in scrypt, so there's no native module (bcrypt) to compile
-// on deploy. Stored format: "scrypt$<salt hex>$<hash hex>".
 async function hashPassword(password) {
   const salt = crypto.randomBytes(16);
   const hash = await scrypt(String(password), salt, KEY_LENGTH);

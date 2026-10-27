@@ -1,7 +1,5 @@
 import React from "react";
 
-/* Page-structure primitives: width container, vertical section, headings. */
-
 export function Container({ narrow = false, as: Tag = "div", className = "", children, ...rest }) {
   return (
     <Tag className={`ui-container${narrow ? " ui-container--narrow" : ""} ${className}`} {...rest}>
@@ -10,8 +8,6 @@ export function Container({ narrow = false, as: Tag = "div", className = "", chi
   );
 }
 
-// A full-width page section with standard vertical spacing. `narrow` keeps
-// the content at reading width but aligned with the page's left edge.
 export const Section = React.forwardRef(function Section(
   { bordered = false, narrow = false, className = "", containerClassName = "", children, ...rest },
   ref
@@ -23,7 +19,6 @@ export const Section = React.forwardRef(function Section(
   );
 });
 
-// Eyebrow + heading + description, with an optional action on the right.
 export function SectionHeader({ eyebrow, title, description, action = null, align = "start", as: Heading = "h2" }) {
   return (
     <div className={`ui-section-header${align === "center" ? " ui-section-header--center" : ""}`}>
@@ -37,7 +32,6 @@ export function SectionHeader({ eyebrow, title, description, action = null, alig
   );
 }
 
-// Title block at the top of content pages (About, Contact, policies…).
 export function PageHeader({ eyebrow, title, description, children }) {
   return (
     <header className="ui-page-header">

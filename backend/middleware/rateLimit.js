@@ -1,11 +1,6 @@
-// Tiny in-memory rate limiter, same idea as confirmRateLimit in index.js but
-// reusable. Good enough for a single server instance; counts reset on restart.
-//
-//   router.post("/login", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }), handler)
 function rateLimit({ windowMs, max, keyFn = (req) => req.ip, message }) {
   const hits = new Map();
 
-  // Without this sweep the Map would keep one entry per key forever.
   const sweep = setInterval(() => {
     const cutoff = Date.now() - windowMs;
     for (const [key, times] of hits) {
@@ -21,6 +16,7 @@ function rateLimit({ windowMs, max, keyFn = (req) => req.ip, message }) {
     const key = keyFn(req);
     const recent = (hits.get(key) || []).filter((t) => now - t < windowMs);
     if (recent.length >= max) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000))));
       return res.status(429).json({
         error: message || "Too many attempts. Please wait a few minutes and try again.",
       });

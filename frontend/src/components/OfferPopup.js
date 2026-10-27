@@ -2,27 +2,19 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Countdown from "react-countdown";
 import { LuClock, LuArrowRight } from "react-icons/lu";
-import { API_BASE } from "../config/api";
+import { getProducts } from "../api/products";
 import { getOfferEnd, findBiggestDeal } from "../utils/offer";
 import { formatPlanDuration } from "../utils/pricing";
 import { Badge, Button, Modal, Price } from "./ui";
 import ProductImage from "./store/ProductImage";
 import "./OfferPopup.css";
 
-/* ============================================================
-   FIRST-VISIT OFFER POPUP — shown once per browser, a moment
-   after a new visitor arrives. Edit the settings below.
-============================================================ */
 const OFFER = {
-  enabled: true,
-  // Change the version (e.g. "_v2") to show the popup again to everyone,
-  // including people who already closed it.
+  enabled: false,
   storageKey: "mkr_offer_popup_v1",
   delayMs: 1500,
-  // Never interrupt checkout or the admin tool.
-  hiddenOn: ["/payment", "/filedelivery"],
+  hiddenOn: ["/cart", "/checkout", "/orders", "/account", "/filedelivery"],
   eyebrow: "Limited-time offer",
-  // "{pct}" is replaced with the store's real biggest discount.
   title: "Up to {pct}% off premium tools",
   fallbackTitle: "Today's sale is live",
   text: "Sale prices on premium subscriptions and tools. The offer ends when the timer runs out.",
@@ -40,7 +32,6 @@ function markOfferSeen() {
   try {
     localStorage.setItem(OFFER.storageKey, "1");
   } catch {
-    // storage blocked (e.g. private mode) — it simply shows once per page load
   }
 }
 
@@ -80,26 +71,23 @@ export default function OfferPopup() {
   const [eligible] = useState(() => OFFER.enabled && !hasSeenOffer());
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
-  const [deal, setDeal] = useState(undefined); // undefined = loading, null = none
+  const [deal, setDeal] = useState(undefined);
   const [end] = useState(getOfferEnd);
 
-  // Look up the biggest real discount to feature (first-time visitors only).
   useEffect(() => {
     if (!eligible) return undefined;
     let cancelled = false;
-    fetch(`${API_BASE}/products`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => !cancelled && setDeal(findBiggestDeal(Array.isArray(data) ? data : [])))
+    getProducts()
+      .then((data) => !cancelled && setDeal(findBiggestDeal(data)))
       .catch(() => !cancelled && setDeal(null));
     return () => {
       cancelled = true;
     };
   }, [eligible]);
 
-  // Open after a short delay, once product data has arrived (or after a few
-  // seconds without it), and never on checkout/admin pages.
   useEffect(() => {
-    if (!eligible || shown || OFFER.hiddenOn.includes(pathname)) return undefined;
+    const hidden = OFFER.hiddenOn.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+    if (!eligible || shown || hidden) return undefined;
     const ready = deal !== undefined;
     const t = setTimeout(() => {
       if (!ready) setDeal((d) => (d === undefined ? null : d));

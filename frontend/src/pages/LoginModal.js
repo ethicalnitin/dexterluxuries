@@ -2,17 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { LuEye, LuEyeOff, LuArrowLeft } from "react-icons/lu";
 import { useAuth } from "./AuthContext";
 import { Modal, Field, Input, Button, Alert } from "../components/ui";
+import { isValidEmail } from "../utils/email";
 import "./LoginModal.css";
 
-/* ============================================================
-   LOGIN / SIGN-UP MODAL — log in, create an account, or reset a
-   forgotten password with a code sent by email.
-   Rendered once by <AuthProvider>; you never place this
-   component yourself. Open it via useAuth().openLogin(),
-   openSignup() or requireAuth(...) from anywhere in the app.
-============================================================ */
-
-const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const PASSWORD_MIN = 8;
 const RESEND_COOLDOWN = 30;
 const EMPTY_OTP = ["", "", "", "", "", ""];
@@ -45,7 +37,6 @@ const PasswordInput = ({ id, value, onChange, autoComplete, placeholder, inputRe
 const LoginModal = ({ isOpen, initialView, onClose }) => {
   const { login, signup, requestPasswordReset, resetPassword } = useAuth();
 
-  // 'login' | 'signup' | 'forgot' (enter email) | 'reset' (enter code + new password)
   const [view, setView] = useState(initialView);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,7 +50,6 @@ const LoginModal = ({ isOpen, initialView, onClose }) => {
   const newPasswordRef = useRef(null);
   const otpRefs = useRef([]);
 
-  // Reset to a clean state every time the modal opens.
   useEffect(() => {
     if (isOpen) {
       setView(initialView);
@@ -70,7 +60,6 @@ const LoginModal = ({ isOpen, initialView, onClose }) => {
     }
   }, [isOpen, initialView]);
 
-  // Focus the first field of whichever view is showing.
   useEffect(() => {
     if (!isOpen) return;
     const t = setTimeout(() => {
@@ -93,8 +82,6 @@ const LoginModal = ({ isOpen, initialView, onClose }) => {
     setError("");
   };
 
-  // Shared wrapper: shows the spinner, surfaces the server's error message.
-  // On success AuthProvider closes the modal, so there's nothing to reset.
   const run = async (task) => {
     setError("");
     setLoading(true);

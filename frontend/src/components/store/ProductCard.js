@@ -1,39 +1,66 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Badge, Price } from "../ui";
-import { getStartingPlan, getPlanPricing, isProductInStock } from "../../utils/pricing";
+import { Price } from "../ui";
+import theme from "../../theme/theme";
+import { formatPlanDuration, getStartingPlan, getPlanPricing, isProductInStock, shortPlanName } from "../../utils/pricing";
 import ProductImage from "./ProductImage";
 import "./store.css";
 
-/**
- * Catalog card. The whole card is clickable through the product-name link
- * (stretched over the card), so there's one link per card for keyboard and
- * screen-reader users. Sold-out products render without a link.
- *
- * `rank` (optional) shows a "#1" marker, used by the weekly top picks.
- */
-export default function ProductCard({ product, rank = null }) {
-  const inStock = isProductInStock(product);
+export function categoryTint(category) {
+  const tints = theme.categoryTints;
+  const key = String(category || "");
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return tints[hash % tints.length];
+}
+
+function productSummary(product) {
   const { price, strike, discountPct } = getPlanPricing(getStartingPlan(product));
-  const isMultiPlan = Array.isArray(product.plans) && product.plans.length > 1;
-  const href = `/product/${product.id}`;
+  return {
+    inStock: isProductInStock(product),
+    price,
+    strike,
+    discountPct,
+    isMultiPlan: Array.isArray(product.plans) && product.plans.length > 1,
+    href: `/product/${product.id}`,
+  };
+}
+
+function PlanChips({ plans }) {
+  if (!Array.isArray(plans) || plans.length === 0) return null;
+  const names = plans.map(formatPlanDuration);
+  const shown = plans.slice(0, 3);
+  const extra = plans.length - shown.length;
+  return (
+    <p className="product-card__plans">
+      <span className="ui-visually-hidden">{plans.length === 1 ? `Plan: ${names[0]}` : `${plans.length} plans: ${names.join(", ")}`}</span>
+      {shown.map((plan, i) => (
+        <span key={`${names[i]}-${i}`} className="plan-chip" aria-hidden="true">
+          {plans.length === 1 ? names[i] : shortPlanName(plan)}
+        </span>
+      ))}
+      {extra > 0 && (
+        <span className="plan-chip" aria-hidden="true">
+          +{extra}
+        </span>
+      )}
+    </p>
+  );
+}
+
+export default function ProductCard({ product }) {
+  const { inStock, price, strike, discountPct, isMultiPlan, href } = productSummary(product);
+  const maker = product.brand || product.category;
 
   return (
     <article className={`product-card${inStock ? "" : " product-card--soldout"}`}>
-      <div className="product-card__media">
+      <div className="product-card__media" style={{ "--tint": categoryTint(product.category) }}>
         <ProductImage src={product.image} name={product.name} />
-        <div className="product-card__flags">
-          {rank && <span className="product-card__rank">#{rank}</span>}
-          {!inStock ? (
-            <Badge variant="danger">Out of stock</Badge>
-          ) : discountPct ? (
-            <Badge variant="success">-{discountPct}%</Badge>
-          ) : null}
-        </div>
+        {!inStock && <span className="product-card__soldout">Out of stock</span>}
       </div>
 
       <div className="product-card__body">
-        {product.category && <span className="product-card__category">{product.category}</span>}
+        {maker && <p className="product-card__brand">{maker}</p>}
         <h3 className="product-card__name">
           {inStock ? (
             <Link to={href} className="product-card__link">
@@ -43,11 +70,42 @@ export default function ProductCard({ product, rank = null }) {
             product.name
           )}
         </h3>
-        <div className="product-card__footer">
+        <PlanChips plans={product.plans} />
+        <div className="product-card__price">
           <Price amount={price} strike={strike} from={isMultiPlan} size="sm" />
-          {inStock && <span className="product-card__cta" aria-hidden="true">View →</span>}
+          {inStock && discountPct ? <span className="deal-tag">{discountPct}% off</span> : null}
         </div>
       </div>
     </article>
+  );
+}
+
+export function ProductRow({ product }) {
+  const { inStock, price, discountPct, isMultiPlan, href } = productSummary(product);
+
+  return (
+    <div className={`product-row${inStock ? "" : " product-row--soldout"}`}>
+      <span className="product-row__thumb" style={{ "--tint": categoryTint(product.category) }}>
+        <ProductImage src={product.image} name={product.name} />
+      </span>
+      <span className="product-row__text">
+        <span className="product-row__brand">{product.brand || product.category}</span>
+        {inStock ? (
+          <Link to={href} className="product-row__name product-card__link">
+            {product.name}
+          </Link>
+        ) : (
+          <span className="product-row__name">{product.name}</span>
+        )}
+        <span className="product-row__price">
+          <Price amount={price} from={isMultiPlan} size="sm" />
+          {!inStock ? (
+            <span className="product-row__soldout">Out of stock</span>
+          ) : discountPct ? (
+            <span className="deal-tag">{discountPct}% off</span>
+          ) : null}
+        </span>
+      </span>
+    </div>
   );
 }

@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import { LuChevronDown } from "react-icons/lu";
 
-/**
- * FAQ-style accordion. One item open at a time.
- *   <Accordion items={[{ q: "Question", a: "Answer" }]} defaultOpen={0} />
- * `a` may be a string or JSX.
- */
 export default function Accordion({ items, defaultOpen = -1, idPrefix = "faq" }) {
   const [openIndex, setOpenIndex] = useState(defaultOpen);
 

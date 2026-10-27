@@ -2,7 +2,6 @@ import React from "react";
 import { LuCompass } from "react-icons/lu";
 import { Button, Container, StatusMessage } from "../components/ui";
 
-// Shown for any URL that doesn't match a route in App.js.
 const NotFound = () => (
   <Container>
     <StatusMessage

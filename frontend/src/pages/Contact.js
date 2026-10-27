@@ -4,7 +4,6 @@ import { FaWhatsapp, FaTelegram, FaInstagram } from "react-icons/fa6";
 import { PageHeader, Section } from "../components/ui";
 import "./ContentPages.css";
 
-// Contact destinations are unchanged from the previous version of this page.
 const channels = [
   {
     Icon: LuMail,

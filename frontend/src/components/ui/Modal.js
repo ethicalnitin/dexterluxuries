@@ -2,14 +2,6 @@ import React, { useEffect, useId } from "react";
 import { LuX } from "react-icons/lu";
 import Button from "./Button";
 
-/**
- * Accessible modal dialog: closes on Escape and backdrop click, locks
- * page scroll while open, and returns focus to the opener on close.
- *
- *   <Modal open={open} onClose={close} title="Where should we send access?">…</Modal>
- *
- * `eyebrow` (optional) renders a small label above the title.
- */
 export default function Modal({ open, onClose, title, eyebrow, description, ariaLabel, className = "", children }) {
   const titleId = useId();
 

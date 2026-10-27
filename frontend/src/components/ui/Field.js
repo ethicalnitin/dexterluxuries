@@ -1,14 +1,6 @@
 import React from "react";
 import { LuChevronDown } from "react-icons/lu";
 
-/**
- * Form field wrapper: label, optional right-hand label content,
- * the control, then help text or an error message.
- *
- *   <Field label="Email" htmlFor="email" error={err}>
- *     <Input id="email" type="email" invalid={!!err} />
- *   </Field>
- */
 export function Field({ label, htmlFor, labelAside = null, hint, error, children, className = "" }) {
   return (
     <div className={`ui-field ${className}`}>

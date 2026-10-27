@@ -1,7 +1,3 @@
-// Pricing helpers shared by the catalog (HomePage) and ProductPage.
-// Prices come from the backend in USD. Behaviour is unchanged from the
-// copies that previously lived in each page.
-
 export function formatUSD(amount) {
   if (amount === null || amount === undefined || amount === "") return null;
   const n = Number(amount);
@@ -9,27 +5,53 @@ export function formatUSD(amount) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// Turns a plan's `durationInMonths` into the label shown on its card.
-// null / 0 / undefined means "lifetime" per the model's own comment.
 export function formatPlanDuration(plan) {
   if (plan.name) return plan.name;
   if (!plan.durationInMonths) return "Lifetime";
   return plan.durationInMonths === 1 ? "1 Month" : `${plan.durationInMonths} Months`;
 }
 
-// A plan is treated as in-stock unless it explicitly says otherwise —
-// matches the schema's `available: { default: true }`.
+export function shortPlanName(plan) {
+  return formatPlanDuration(plan)
+    .replace(/\blifetime access\b/i, "Lifetime")
+    .replace(/\bmonths?\b/i, "mo")
+    .replace(/\byears?\b/i, "yr")
+    .trim();
+}
+
+export function monthlyPrice(plan) {
+  const months = Number(plan?.durationInMonths);
+  const price = Number(plan?.price);
+  if (!Number.isFinite(months) || months < 2 || !Number.isFinite(price)) return null;
+  return price / months;
+}
+
+export function bestValuePlanIndex(plans) {
+  let best = -1;
+  let bestMonthly = Infinity;
+  let compared = 0;
+  (plans || []).forEach((plan, i) => {
+    const months = Number(plan.durationInMonths);
+    const price = Number(plan.price);
+    if (!isPlanAvailable(plan) || !Number.isFinite(months) || months < 1 || !Number.isFinite(price)) return;
+    compared += 1;
+    const monthly = price / months;
+    if (monthly < bestMonthly) {
+      bestMonthly = monthly;
+      best = i;
+    }
+  });
+  return compared >= 2 ? best : -1;
+}
+
 export function isPlanAvailable(plan) {
   return plan?.available !== false;
 }
 
-// stock === false -> explicitly out of stock. Missing/undefined `stock`
-// is treated as in-stock.
 export function isProductInStock(product) {
   return product?.stock !== false;
 }
 
-// Cheapest plan, used for the "From $x" price on catalog cards.
 export function getStartingPlan(product) {
   if (!Array.isArray(product.plans) || product.plans.length === 0) return null;
   return product.plans.reduce(
@@ -38,7 +60,6 @@ export function getStartingPlan(product) {
   );
 }
 
-// Formatted price, strike-through price and whole-number discount % for a plan.
 export function getPlanPricing(plan) {
   if (!plan) return { price: null, strike: null, discountPct: null };
 
@@ -53,7 +74,6 @@ export function getPlanPricing(plan) {
   };
 }
 
-// Checkout is paid in rupees over UPI.
 export const USD_TO_INR_RATE = 99;
 
 export function convertUsdToInr(usdAmount) {

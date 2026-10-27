@@ -8,10 +8,12 @@ const { hashPassword, verifyPassword } = require("../utils/password");
 const { sendPasswordResetEmail } = require("../utils/mailer");
 const { requireAuth } = require("../middleware/auth");
 const { rateLimit } = require("../middleware/rateLimit");
+const { isValidEmail, normalizeEmail, readString: readPassword } = require("../utils/validate");
+const { config } = require("../config/env");
+const { logger } = require("../utils/logger");
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET;
 const OTP_COOLDOWN_SECONDS = 30;
 const OTP_MAX_ATTEMPTS = 5;
 const PASSWORD_MIN = 8;
@@ -20,32 +22,18 @@ const NAME_MIN = 2;
 const NAME_MAX = 60;
 const MINUTE = 60 * 1000;
 
-const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
-const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
-// Only accept real strings so `{ "password": {...} }` can't sneak through.
-const readPassword = (value) => (typeof value === "string" ? value : "");
-
 function passwordProblem(password) {
   if (password.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters.`;
   if (password.length > PASSWORD_MAX) return `Password must be at most ${PASSWORD_MAX} characters.`;
   return null;
 }
 
-function toPublicUser(user) {
-  return { id: user._id.toString(), name: user.name || "", email: user.email };
-}
-
 function issueToken(user) {
-  return jwt.sign({ sub: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ sub: user._id.toString(), email: user.email }, config.jwtSecret, { expiresIn: "30d" });
 }
 
-// Login with an unknown email still runs one scrypt, so response time doesn't
-// reveal which emails have accounts.
 const dummyHashPromise = hashPassword(crypto.randomBytes(16).toString("hex"));
 
-// Checks a reset code and consumes it on success. Returns null when the code
-// is good, otherwise { status, error }. Attempts are counted with an atomic
-// $inc *before* comparing, so parallel guesses can't exceed OTP_MAX_ATTEMPTS.
 async function consumeOtp(email, code) {
   const record = await Otp.findOneAndUpdate(
     { email, attempts: { $lt: OTP_MAX_ATTEMPTS } },
@@ -65,12 +53,10 @@ async function consumeOtp(email, code) {
     return { status: 400, error: "Incorrect code. Check it and try again." };
   }
 
-  await Otp.deleteMany({ email }); // one-time use
+  await Otp.deleteMany({ email });
   return null;
 }
 
-// ─── POST /api/auth/signup ─────────────────────────────────────────────────
-// body: { name, email, password } -> 201 { token, user }
 router.post(
   "/signup",
   rateLimit({ windowMs: 60 * MINUTE, max: 10, message: "Too many sign-up attempts. Try again later." }),
@@ -107,24 +93,19 @@ router.post(
         lastLoginAt: new Date(),
       });
 
-      res.status(201).json({ token: issueToken(user), user: toPublicUser(user) });
+      res.status(201).json({ token: issueToken(user), user: user.toPublic() });
     } catch (err) {
       if (err.code === 11000) {
-        // Two sign-ups for the same email raced past the findOne above.
         return res.status(409).json({ error: "An account with this email already exists. Log in instead." });
       }
-      console.error("[Auth] signup error:", err.message);
+      logger.error("Signup failed", { requestId: req.id, err });
       res.status(500).json({ error: "Couldn't create your account. Try again." });
     }
   }
 );
 
-// ─── POST /api/auth/login ──────────────────────────────────────────────────
-// body: { email, password } -> { token, user }
 router.post(
   "/login",
-  // Keyed on IP + email so one shared mobile-carrier IP doesn't lock out
-  // everyone behind it, while still capping guesses against any one account.
   rateLimit({
     windowMs: 15 * MINUTE,
     max: 10,
@@ -157,18 +138,14 @@ router.post(
       }
 
       await User.updateOne({ _id: user._id }, { lastLoginAt: new Date() });
-      res.json({ token: issueToken(user), user: toPublicUser(user) });
+      res.json({ token: issueToken(user), user: user.toPublic() });
     } catch (err) {
-      console.error("[Auth] login error:", err.message);
+      logger.error("Login failed", { requestId: req.id, err });
       res.status(500).json({ error: "Couldn't log you in. Try again." });
     }
   }
 );
 
-// ─── POST /api/auth/forgot-password ────────────────────────────────────────
-// body: { email } -> { success: true }
-// Emails a 6-digit reset code. Responds the same way whether or not the
-// account exists.
 router.post(
   "/forgot-password",
   rateLimit({ windowMs: 15 * MINUTE, max: 10 }),
@@ -185,7 +162,6 @@ router.post(
         return res.json({ success: true });
       }
 
-      // Cooldown: don't let someone spam an inbox with codes.
       const lastOtp = await Otp.findOne({ email }).sort({ createdAt: -1 });
       if (lastOtp) {
         const secondsSince = (Date.now() - lastOtp.createdAt.getTime()) / 1000;
@@ -197,27 +173,27 @@ router.post(
       }
 
       const code = generateOtp();
-      await Otp.deleteMany({ email }); // any older, unused codes for this email are now invalid
+      await Otp.deleteMany({ email });
       await Otp.create({ email, codeHash: hashOtp(code) });
 
       try {
         await sendPasswordResetEmail(email, code);
       } catch (err) {
-        // Drop the code we couldn't deliver so the cooldown doesn't block a retry.
         await Otp.deleteMany({ email });
         throw err;
       }
 
       res.json({ success: true });
     } catch (err) {
-      console.error("[Auth] forgot-password error:", err.message);
+      if (err.code === "MAIL_NOT_CONFIGURED") {
+        return res.status(503).json({ error: "Password reset is temporarily unavailable. Contact support." });
+      }
+      logger.error("Forgot-password failed", { requestId: req.id, err });
       res.status(500).json({ error: "Couldn't send the reset code. Try again." });
     }
   }
 );
 
-// ─── POST /api/auth/reset-password ─────────────────────────────────────────
-// body: { email, otp, password } -> { token, user }
 router.post(
   "/reset-password",
   rateLimit({ windowMs: 15 * MINUTE, max: 20 }),
@@ -246,21 +222,18 @@ router.post(
       }
 
       user.passwordHash = await hashPassword(password);
-      user.passwordChangedAt = new Date(); // signs out every other session
+      user.passwordChangedAt = new Date();
       user.lastLoginAt = new Date();
       await user.save();
 
-      res.json({ token: issueToken(user), user: toPublicUser(user) });
+      res.json({ token: issueToken(user), user: user.toPublic() });
     } catch (err) {
-      console.error("[Auth] reset-password error:", err.message);
+      logger.error("Reset-password failed", { requestId: req.id, err });
       res.status(500).json({ error: "Couldn't reset your password. Try again." });
     }
   }
 );
 
-// ─── GET /api/auth/me ───────────────────────────────────────────────────────
-// Lets the frontend check whether a token it has stored is still valid,
-// e.g. on app load, and returns the current profile.
 router.get("/me", requireAuth, (req, res) => {
   res.json({ user: req.user });
 });

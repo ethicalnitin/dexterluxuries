@@ -1,26 +1,24 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaInstagram, FaFacebook, FaTelegram } from "react-icons/fa6";
+import { FaInstagram, FaTelegram } from "react-icons/fa6";
 import theme from "../theme/theme";
 import "./layout.css";
 
-// Social and contact destinations are kept exactly as they were.
 const socials = [
   { label: "Instagram", href: "https://www.instagram.com/chartvault.store_official", Icon: FaInstagram },
-  { label: "Facebook", href: "https://www.facebook.com/", Icon: FaFacebook },
   { label: "Telegram", href: "https://t.me/aasarambapu", Icon: FaTelegram },
 ];
 
 const navigation = [
-  { label: "Home", to: "/" },
-  { label: "About Us", to: "/about" },
-  { label: "Contact Us", to: "/contact" },
-  { label: "Proofs & Vouches", to: "/proofs" },
+  { label: "All products", to: "/" },
+  { label: "Delivery proofs", to: "/proofs" },
+  { label: "About us", to: "/about" },
+  { label: "Contact", to: "/contact" },
 ];
 
 const legal = [
-  { label: "Refund Policy", to: "/refund-policy" },
-  { label: "Privacy Policy", to: "/privacy-policy" },
+  { label: "Refund policy", to: "/refund-policy" },
+  { label: "Privacy policy", to: "/privacy-policy" },
 ];
 
 export const Footer = () => {
@@ -54,7 +52,7 @@ export const Footer = () => {
           </div>
 
           <div>
-            <h2 className="site-footer__title">Navigation</h2>
+            <h2 className="site-footer__title">Store</h2>
             <ul className="site-footer__links">
               {navigation.map((l) => (
                 <li key={l.to}>

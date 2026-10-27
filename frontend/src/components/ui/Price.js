@@ -1,10 +1,5 @@
 import React from "react";
 
-/**
- * Price display. Pass already-formatted strings (see utils/pricing.js).
- *   <Price amount="$12.00" strike="$20.00" from />
- * size: sm | md | lg | xl
- */
 const SIZES = {
   sm: "var(--text-base)",
   md: "var(--text-lg)",

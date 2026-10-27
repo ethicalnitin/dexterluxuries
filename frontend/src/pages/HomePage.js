@@ -1,93 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  LuLock,
-  LuZap,
-  LuShieldCheck,
-  LuHeadphones,
-  LuGlobe,
-  LuBadgeCheck,
-  LuPackage,
-  LuRefreshCw,
-  LuArrowRight,
-} from "react-icons/lu";
-import { API_BASE } from "../config/api";
-import {
-  Accordion,
-  Button,
-  CtaPanel,
-  FeatureGrid,
-  Section,
-  SectionHeader,
-  StatusMessage,
-} from "../components/ui";
-import ProductCard from "../components/store/ProductCard";
+import { Link, useSearchParams } from "react-router-dom";
+import { LuPackage, LuRefreshCw, LuSearch, LuX, LuArrowRight } from "react-icons/lu";
+import { getProducts } from "../api/products";
+import { getStartingPlan } from "../utils/pricing";
+import { Accordion, Button, Section, Select, StatusMessage } from "../components/ui";
+import ProductCard, { ProductRow, categoryTint } from "../components/store/ProductCard";
+import ProductImage from "../components/store/ProductImage";
 import "./Homepage.css";
 
-/* ============================================================
-   HOMEPAGE — hero, weekly top picks, filterable catalog, why-us,
-   checkout guarantees, FAQ. Header/footer come from App.js.
-============================================================ */
-
-const trustItems = [
-  { label: "Encrypted checkout", Icon: LuLock },
-  { label: "Instant delivery", Icon: LuZap },
-  { label: "Verified products", Icon: LuShieldCheck },
-  { label: "Human support", Icon: LuHeadphones },
-  { label: "Worldwide checkout", Icon: LuGlobe },
+const facts = [
+  { title: "UPI checkout", text: "Google Pay, PhonePe, Paytm or any UPI app" },
+  { title: "Checked by a person", text: "Every payment is matched to our bank statement" },
+  { title: "Replacement guarantee", text: "For the full length of your plan" },
 ];
 
-const assurances = [
-  { label: "License", title: "Verified", text: "Checked before fulfillment", Icon: LuBadgeCheck },
-  { label: "Payment", title: "Encrypted", text: "Handled by our processor", Icon: LuLock },
-  { label: "Delivery", title: "Instant", text: "Access issued on payment", Icon: LuZap },
+const steps = [
+  { title: "Choose a plan", text: "Pick the product and the plan length that suits you." },
+  { title: "Pay by UPI", text: "Pay from any UPI app, then enter the 12-digit UTR from your receipt." },
+  { title: "We verify the payment", text: "Your UTR is matched against our bank statement before anything is released." },
+  { title: "Get your access", text: "Access details arrive by WhatsApp or email, usually within 15–30 minutes." },
 ];
 
-const valueProps = [
-  {
-    title: "Vetted before listing",
-    text: "Every product is checked against its source and licensing terms before it goes live on the store.",
-    Icon: LuShieldCheck,
-  },
-  {
-    title: "Delivered the moment you pay",
-    text: "No waiting on manual fulfillment — access details are issued automatically once payment clears.",
-    Icon: LuZap,
-  },
-  {
-    title: "Support that actually replies",
-    text: "Questions before or after a purchase go to a real person, not a ticket queue that goes quiet.",
-    Icon: LuHeadphones,
-  },
-];
-
-const securityChecks = [
-  {
-    title: "Encrypted checkout",
-    text: "Card and payment details are handled by our payment processor and never touch our servers unencrypted.",
-  },
-  {
-    title: "Order verification",
-    text: "Every purchase is checked before a license or download is released.",
-  },
-  {
-    title: "Clear refund policy",
-    text: (
-      <>
-        Products that are defective or not as described can be refunded if you ask within 7 days.{" "}
-        <Link to="/refund-policy" className="ui-link">
-          Read the refund policy
-        </Link>
-      </>
-    ),
-  },
-];
-
-// Answers are taken from the store's own checkout, product and refund-policy copy.
 const faqItems = [
   {
     q: "How is my product delivered?",
-    a: "After you pay by UPI and enter the 12-digit UTR from your payment receipt, we match it against our bank statement and send your access on WhatsApp — usually within 15–30 minutes.",
+    a: "After you pay by UPI and enter the 12-digit UTR from your payment receipt, we match it against our bank statement and send your access — usually within 15–30 minutes.",
   },
   {
     q: "What payment methods do you accept?",
@@ -108,29 +45,48 @@ const faqItems = [
   },
   {
     q: "What if something doesn't work?",
-    a: "We offer a replacement guarantee. Message us on Telegram with your order ID and we'll fix or replace it, no questions asked.",
+    a: "We offer a replacement guarantee. Message us on Telegram or WhatsApp with your order reference and we'll fix or replace it.",
   },
 ];
 
-// Edit this list to change the "Hit products of the week" picks (product ids).
-const HIT_OF_WEEK_IDS = ["117", "118", "119"];
+const FEATURED_IDS = ["117", "118", "119"];
 
-const getWeeklyHits = (products, hitIds = HIT_OF_WEEK_IDS) =>
-  hitIds
-    .map((id) => products.find((p) => String(p.id) === String(id)))
-    .filter(Boolean)
-    .slice(0, 3);
-
-const buildCategoryList = (products) => {
-  const counts = new Map();
-  products.forEach((p) => {
-    const key = p.category || "Uncategorized";
-    counts.set(key, (counts.get(key) || 0) + 1);
-  });
-  const categories = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
-  categories.sort((a, b) => b.count - a.count);
-  return [{ name: "All", count: products.length }, ...categories];
+const SORTS = {
+  featured: "Featured",
+  "price-asc": "Price: low to high",
+  "price-desc": "Price: high to low",
 };
+
+const getFeatured = (products) =>
+  FEATURED_IDS.map((id) => products.find((p) => String(p.id) === String(id))).filter(Boolean);
+
+function buildCategories(products) {
+  const byName = new Map();
+  products.forEach((p) => {
+    const name = p.category || "Uncategorized";
+    const entry = byName.get(name) || { name, count: 0, image: "" };
+    entry.count += 1;
+    if (!entry.image && p.image) entry.image = p.image;
+    byName.set(name, entry);
+  });
+  return [...byName.values()].sort((a, b) => b.count - a.count);
+}
+
+const matchesQuery = (product, query) =>
+  [product.name, product.category, product.brand].some((field) => String(field || "").toLowerCase().includes(query));
+
+function sortByPrice(products, direction) {
+  const priceOf = (p) => Number(getStartingPlan(p)?.price);
+  return [...products].sort((a, b) => {
+    const pa = priceOf(a);
+    const pb = priceOf(b);
+    if (!Number.isFinite(pa)) return 1;
+    if (!Number.isFinite(pb)) return -1;
+    return direction === "asc" ? pa - pb : pb - pa;
+  });
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function CatalogSkeleton() {
   return (
@@ -138,11 +94,9 @@ function CatalogSkeleton() {
       {Array.from({ length: 8 }).map((_, i) => (
         <div className="home-skeleton-card" key={i}>
           <div className="ui-skeleton home-skeleton-card__media" />
-          <div className="home-skeleton-card__body">
-            <div className="ui-skeleton" style={{ height: 10, width: "40%" }} />
-            <div className="ui-skeleton" style={{ height: 14, width: "85%" }} />
-            <div className="ui-skeleton" style={{ height: 14, width: "30%" }} />
-          </div>
+          <div className="ui-skeleton" style={{ height: 10, width: "35%" }} />
+          <div className="ui-skeleton" style={{ height: 14, width: "85%" }} />
+          <div className="ui-skeleton" style={{ height: 14, width: "40%" }} />
         </div>
       ))}
     </div>
@@ -151,19 +105,20 @@ function CatalogSkeleton() {
 
 const HomePage = () => {
   const [products, setProducts] = useState([]);
-  const [status, setStatus] = useState("loading"); // loading | ready | error
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [status, setStatus] = useState("loading");
+  const [sort, setSort] = useState("featured");
+  const [params, setParams] = useSearchParams();
   const catalogRef = useRef(null);
+
+  const activeCategory = params.get("category") || "";
+  const query = (params.get("q") || "").trim();
+  const isFiltered = Boolean(activeCategory || query);
 
   const loadProducts = useCallback(() => {
     setStatus("loading");
-    fetch(`${API_BASE}/products`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        return res.json();
-      })
+    getProducts()
       .then((data) => {
-        setProducts(Array.isArray(data) ? data : []);
+        setProducts(data);
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
@@ -173,93 +128,143 @@ const HomePage = () => {
     loadProducts();
   }, [loadProducts]);
 
-  const weeklyHits = useMemo(() => getWeeklyHits(products), [products]);
-  const categories = useMemo(() => buildCategoryList(products), [products]);
-  const filteredProducts = useMemo(
-    () =>
-      activeCategory === "All"
-        ? products
-        : products.filter((p) => (p.category || "Uncategorized") === activeCategory),
-    [products, activeCategory]
-  );
+  useEffect(() => {
+    if (isFiltered && status === "ready") catalogRef.current?.scrollIntoView({ block: "start" });
+  }, [isFiltered, activeCategory, query, status]);
 
-  // In-page scroll (a "#catalog" href would be read as a route by the hash router).
+  const featured = useMemo(() => getFeatured(products), [products]);
+  const categories = useMemo(() => buildCategories(products), [products]);
+  const visibleProducts = useMemo(() => {
+    const q = query.toLowerCase();
+    const filtered = products.filter(
+      (p) => (!activeCategory || (p.category || "Uncategorized") === activeCategory) && (!q || matchesQuery(p, q))
+    );
+    return sort === "featured" ? filtered : sortByPrice(filtered, sort === "price-asc" ? "asc" : "desc");
+  }, [products, activeCategory, query, sort]);
+
+  const updateParams = (changes) => {
+    const next = new URLSearchParams(params);
+    Object.entries(changes).forEach(([key, value]) => (value ? next.set(key, value) : next.delete(key)));
+    setParams(next);
+  };
+
+  const heading = query ? `Results for “${query}”` : activeCategory || "All products";
   const scrollToCatalog = () => catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div className="home">
-      {/* ---------- Hero ---------- */}
-      <section className="home-hero">
-        <div className="ui-container home-hero__grid">
-          <div className="home-hero__copy">
-            <span className="ui-eyebrow">Digital products marketplace</span>
-            <h1 className="ui-title-hero">Premium software, sold with proof, not promises.</h1>
-            <p className="ui-lead">
-              Every order runs through the same verification and delivery process — so what you see at checkout is
-              exactly what lands in your account.
+      <section className="home-intro">
+        <div className={`ui-container home-intro__grid${featured.length ? "" : " home-intro__grid--single"}`}>
+          <div className="home-intro__copy">
+            <h1 className="home-intro__title">Software subscriptions, trading tools and courses — on your own account.</h1>
+            <p className="home-intro__lead">
+              Choose a plan, pay by UPI and receive your access details once we've verified the payment, usually within 15–30
+              minutes.
             </p>
-            <div className="home-hero__actions">
-              <Button variant="primary" size="lg" onClick={scrollToCatalog} iconRight={<LuArrowRight />}>
-                Browse products
+            <ul className="home-facts">
+              {facts.map(({ title, text }) => (
+                <li key={title}>
+                  <strong>{title}</strong>
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="home-intro__links">
+              <Button variant="primary" onClick={scrollToCatalog} iconRight={<LuArrowRight />}>
+                Browse the catalog
               </Button>
-              <Button variant="secondary" size="lg" to="/proofs">
+              <Link to="/proofs" className="ui-link">
                 See delivery proofs
-              </Button>
+              </Link>
             </div>
           </div>
 
-          <ul className="home-assurance" aria-label="How every order is handled">
-            {assurances.map(({ label, title, text, Icon }) => (
-              <li className="home-assurance__item" key={label}>
-                <span className="ui-icon-tile">
-                  <Icon aria-hidden="true" />
-                </span>
-                <div>
-                  <span className="home-assurance__label">{label}</span>
-                  <strong>{title}</strong>
-                  <span className="home-assurance__text">{text}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {featured.length > 0 && (
+            <aside className="home-featured" aria-labelledby="home-featured-title">
+              <h2 id="home-featured-title" className="home-featured__title">
+                Featured
+              </h2>
+              <ul className="home-featured__list">
+                {featured.map((product) => (
+                  <li key={product.id}>
+                    <ProductRow product={product} />
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
         </div>
       </section>
 
-      {/* ---------- Trust bar ---------- */}
-      <div className="home-trustbar">
-        <ul className="ui-container home-trustbar__list">
-          {trustItems.map(({ label, Icon }) => (
-            <li key={label}>
-              <Icon aria-hidden="true" />
-              {label}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* ---------- Weekly top picks ---------- */}
-      {status === "ready" && weeklyHits.length > 0 && (
-        <Section id="hits">
-          <SectionHeader
-            eyebrow="Hit products of the week"
-            title="This week's top 3"
-            description="Ranked by what buyers are actually choosing right now."
-          />
-          <div className="home-hits">
-            {weeklyHits.map((product, i) => (
-              <ProductCard key={product.id} product={product} rank={i + 1} />
+      {status === "ready" && categories.length > 1 && !isFiltered && (
+        <Section className="home-shop-categories" aria-labelledby="home-categories-title">
+          <h2 id="home-categories-title" className="home-section-title">
+            Shop by category
+          </h2>
+          <ul className="home-cat-tiles">
+            {categories.map(({ name, count, image }) => (
+              <li key={name}>
+                <Link to={`/?category=${encodeURIComponent(name)}`} className="home-cat-tile">
+                  <span className="home-cat-tile__media" style={{ "--tint": categoryTint(name) }}>
+                    <ProductImage src={image} name={name} />
+                  </span>
+                  <span className="home-cat-tile__name">{name}</span>
+                  <span className="home-cat-tile__count">{plural(count, "product")}</span>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         </Section>
       )}
 
-      {/* ---------- Catalog ---------- */}
       <Section id="catalog" ref={catalogRef} className="home-catalog">
-        <SectionHeader
-          eyebrow="Full catalog"
-          title="Browse by category"
-          description="Filter down to exactly the kind of tool you're after."
-        />
+        <div className="home-catalog__head">
+          <div className="home-catalog__title">
+            <h2 className="home-section-title">{heading}</h2>
+            {status === "ready" && (
+              <p className="home-count" role="status">
+                {plural(visibleProducts.length, "product")}
+              </p>
+            )}
+          </div>
+          {status === "ready" && products.length > 0 && (
+            <Select aria-label="Sort products" value={sort} onChange={(e) => setSort(e.target.value)} className="home-sort">
+              {Object.entries(SORTS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+
+        {status === "ready" && products.length > 0 && (
+          <div className="home-filters">
+            <div className="home-chips" role="group" aria-label="Filter by category">
+              <button type="button" className="home-chip" aria-pressed={!activeCategory} onClick={() => updateParams({ category: "" })}>
+                All
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  type="button"
+                  className="home-chip"
+                  aria-pressed={activeCategory === cat.name}
+                  onClick={() => updateParams({ category: cat.name })}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+            {query && (
+              <button type="button" className="home-search-pill" onClick={() => updateParams({ q: "" })} aria-label={`Clear search for ${query}`}>
+                <LuSearch aria-hidden="true" />
+                {query}
+                <LuX aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
 
         {status === "loading" && (
           <>
@@ -287,93 +292,62 @@ const HomePage = () => {
           <StatusMessage icon={<LuPackage />} title="No products available right now" text="Check back soon." />
         )}
 
-        {status === "ready" && products.length > 0 && (
-          <>
-            <div className="home-categories" role="group" aria-label="Filter by category">
-              {categories.map((cat) => (
-                <button
-                  key={cat.name}
-                  type="button"
-                  className="home-chip"
-                  aria-pressed={activeCategory === cat.name}
-                  onClick={() => setActiveCategory(cat.name)}
-                >
-                  {cat.name}
-                  <span className="home-chip__count">{cat.count}</span>
-                </button>
-              ))}
-            </div>
+        {status === "ready" && products.length > 0 && visibleProducts.length === 0 && (
+          <StatusMessage
+            icon={<LuSearch />}
+            title="No products match"
+            text="Try a different name, or browse all categories."
+            action={
+              <Button variant="secondary" onClick={() => setParams({})}>
+                Show all products
+              </Button>
+            }
+          />
+        )}
 
-            {filteredProducts.length === 0 ? (
-              <StatusMessage icon={<LuPackage />} title="No products in this category yet" />
-            ) : (
-              <div className="ui-grid home-grid">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            )}
-          </>
+        {status === "ready" && visibleProducts.length > 0 && (
+          <div className="ui-grid home-grid">
+            {visibleProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
         )}
       </Section>
 
-      {/* ---------- Why us ---------- */}
-      <Section id="why-us">
-        <SectionHeader
-          eyebrow="Why shop with us"
-          title="Built to be checked, not just trusted"
-          description="The parts of buying software online that usually feel risky, made visible instead."
-        />
-        <FeatureGrid items={valueProps} columns={3} />
-      </Section>
-
-      {/* ---------- Checkout & guarantees ---------- */}
-      <Section id="security">
-        <div className="home-guarantee">
-          <div className="home-guarantee__intro">
-            <span className="ui-eyebrow">Checkout &amp; guarantees</span>
-            <h2 className="ui-title-section">Nothing about your order is a black box.</h2>
-            <p className="ui-muted">
-              From the moment you pay to the moment your product lands, every step follows the same checked process —
-              outlined here rather than buried in a terms page.
-            </p>
+      <section className="home-process" aria-labelledby="home-process-title">
+        <div className="ui-container home-process__grid">
+          <div className="home-process__intro">
+            <h2 id="home-process-title" className="home-section-title">
+              How buying works
+            </h2>
+            <p>Every plan is for your own account, and a person checks every payment before access is sent.</p>
           </div>
-          <ul className="home-guarantee__list">
-            {securityChecks.map((c) => (
-              <li key={c.title}>
-                <LuShieldCheck aria-hidden="true" />
-                <div>
-                  <strong>{c.title}</strong>
-                  <p>{c.text}</p>
-                </div>
+          <ol className="home-steps">
+            {steps.map(({ title, text }, i) => (
+              <li key={title}>
+                <span className="home-steps__num">{i + 1}</span>
+                <strong>{title}</strong>
+                <p>{text}</p>
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
-      </Section>
+      </section>
 
-      {/* ---------- FAQ ---------- */}
-      <Section id="faq" narrow>
-        <SectionHeader eyebrow="Questions" title="Frequently asked" description="The essentials before you check out." />
-        <Accordion items={faqItems} defaultOpen={0} idPrefix="home-faq" />
-      </Section>
-
-      {/* ---------- Closing call to action ---------- */}
-      <Section>
-        <CtaPanel
-          title="Find your next digital upgrade."
-          text="Browse our latest products and get instant access."
-          actions={
-            <>
-              <Button variant="primary" size="lg" onClick={scrollToCatalog} iconRight={<LuArrowRight />}>
-                Browse products
-              </Button>
-              <Button variant="secondary" size="lg" to="/proofs">
-                See delivery proofs
-              </Button>
-            </>
-          }
-        />
+      <Section className="home-faq">
+        <div className="home-faq__grid">
+          <div className="home-faq__intro">
+            <h2 className="home-section-title">Questions before you buy</h2>
+            <p>
+              Can't find the answer?{" "}
+              <Link to="/contact" className="ui-link">
+                Contact us
+              </Link>
+              .
+            </p>
+          </div>
+          <Accordion items={faqItems} defaultOpen={0} idPrefix="home-faq" />
+        </div>
       </Section>
     </div>
   );

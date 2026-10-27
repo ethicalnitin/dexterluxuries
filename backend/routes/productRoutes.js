@@ -1,96 +1,112 @@
 const express = require("express");
 const Product = require("../models/productData");
+const { requireAuth, requireAdmin } = require("../middleware/auth");
+const { logger } = require("../utils/logger");
 const router = express.Router();
 
-// ✅ Shared Cache
-let cache = {
+const PUBLIC_PROJECTION = "-downloadLink";
+
+const PRODUCT_FIELDS = ["id", "category", "name", "brand", "image", "downloadLink", "description", "plans"];
+
+const cache = {
   allProducts: null,
   time: null,
 };
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000;
 
 const isCacheValid = () =>
   cache.allProducts && cache.time && Date.now() - cache.time < CACHE_DURATION;
 
-// ✅ Add Product
-router.post("/add", async (req, res) => {
-  try {
-    const product = req.body;
+const clearCache = () => {
+  cache.allProducts = null;
+  cache.time = null;
+};
 
-    if (!product || typeof product !== "object") {
-      return res.status(400).json({ error: "Invalid data format, expected a product object." });
+router.post("/add", requireAuth, requireAdmin, async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return res.status(400).json({ error: "Invalid data format, expected a product object." });
+  }
+
+  const product = {};
+  for (const field of PRODUCT_FIELDS) {
+    if (body[field] !== undefined) product[field] = body[field];
+  }
+
+  if (!Number.isInteger(product.id) || product.id <= 0) {
+    return res.status(400).json({ error: "id must be a positive whole number." });
+  }
+  if (typeof product.name !== "string" || !product.name.trim()) {
+    return res.status(400).json({ error: "name is required." });
+  }
+
+  try {
+    if (await Product.exists({ id: product.id })) {
+      return res.status(409).json({ error: `A product with id ${product.id} already exists.` });
     }
 
     const newProduct = new Product(product);
     await newProduct.save();
 
-    // ✅ Clear cache when new product is added
-    cache.allProducts = null;
-    cache.time = null;
+    clearCache();
 
     res.status(201).json({ message: "Product added successfully!", product: newProduct });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error.name === "ValidationError" || error.name === "CastError") {
+      return res.status(400).json({ error: error.message });
+    }
+    logger.error("Adding product failed", { requestId: req.id, err: error });
+    res.status(500).json({ error: "Failed to add product." });
   }
 });
 
-// ✅ Get All Products — WITH CACHE
 router.get("/", async (req, res) => {
   try {
-    // Return cached data if still valid
     if (isCacheValid()) {
-      console.log(`[${new Date().toLocaleTimeString()}] Serving products from cache`);
       return res.json(cache.allProducts);
     }
 
-    // Fetch fresh from DB
-    console.log(`[${new Date().toLocaleTimeString()}] Fetching products from DB...`);
-    const products = await Product.find().lean(); // .lean() = 2x faster
+    const products = await Product.find().select(PUBLIC_PROJECTION).lean();
 
-    // Save to cache
     cache.allProducts = products;
     cache.time = Date.now();
 
     res.json(products);
   } catch (error) {
+    logger.error("Listing products failed", { requestId: req.id, err: error });
     res.status(500).json({ error: "Failed to fetch products" });
   }
 });
 
-// ✅ Get Product by ID — with cache check first
+router.get("/testwake", async (req, res) => {
+  res.status(200).json({ message: "Jag raha hu!" });
+});
+
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
 
   if (isNaN(id)) {
-    return res.status(400).json({ message: "Invalid ID format. Expected a number." });
+    return res.status(400).json({ error: "Invalid ID format. Expected a number." });
   }
 
   try {
-    // ✅ Check cache first before hitting DB
     if (isCacheValid()) {
       const cachedProduct = cache.allProducts.find(p => p.id === id);
       if (cachedProduct) {
-        console.log(`[${new Date().toLocaleTimeString()}] Serving product ${id} from cache`);
         return res.json(cachedProduct);
       }
     }
 
-    // Fallback to DB
-    const product = await Product.findOne({ id }).lean();
+    const product = await Product.findOne({ id }).select(PUBLIC_PROJECTION).lean();
     if (!product) {
-      return res.status(404).json({ message: "Product not found." });
+      return res.status(404).json({ error: "Product not found." });
     }
 
     res.json(product);
   } catch (error) {
-    console.error("Database error:", error);
-    res.status(500).json({ message: "Internal server error." });
+    logger.error("Fetching product failed", { requestId: req.id, productId: id, err: error });
+    res.status(500).json({ error: "Failed to fetch product." });
   }
-});
-
-// ✅ Fixed testwake route — was returning 500 (error code!) before
-router.get("/testwake", async (req, res) => {
-  res.status(200).json({ message: "Jag raha hu!" });
 });
 
 module.exports = router;

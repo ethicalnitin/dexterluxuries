@@ -1,5 +1,3 @@
-/* Recent orders feed. Theme variables only. */
-
 .orders {
   display: grid;
   gap: var(--space-6);

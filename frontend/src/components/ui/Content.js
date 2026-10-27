@@ -1,14 +1,8 @@
 import React from "react";
 
-/* Content patterns shared by the homepage, About and Proofs pages. */
-
-/**
- * Grid of icon + title + text cards.
- *   <FeatureGrid items={[{ Icon: LuZap, title: "Fast", text: "…" }]} columns={3} />
- */
-export function FeatureGrid({ items, columns = 3 }) {
+export function FeatureGrid({ items, columns = 3, plain = false }) {
   return (
-    <div className={`ui-feature-grid ui-feature-grid--${columns}`}>
+    <div className={`ui-feature-grid ui-feature-grid--${columns}${plain ? " ui-feature-grid--plain" : ""}`}>
       {items.map(({ Icon, title, text }) => (
         <div className="ui-card ui-feature" key={title}>
           {Icon && (
@@ -24,10 +18,6 @@ export function FeatureGrid({ items, columns = 3 }) {
   );
 }
 
-/**
- * Row of headline figures.
- *   <StatStrip items={[{ value: "2021", label: "Founded" }]} />
- */
 export function StatStrip({ items }) {
   return (
     <dl className="ui-stats">
@@ -41,10 +31,6 @@ export function StatStrip({ items }) {
   );
 }
 
-/**
- * Closing call-to-action panel.
- *   <CtaPanel title="Ready?" text="…" actions={<Button …/>} />
- */
 export function CtaPanel({ title, text, actions }) {
   return (
     <div className="ui-cta">

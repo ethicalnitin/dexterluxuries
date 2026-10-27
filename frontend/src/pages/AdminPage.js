@@ -1,30 +1,23 @@
-import React, { useState } from "react";
-import emailjs from "@emailjs/browser";
+import React, { useEffect, useRef, useState } from "react";
 import { LuMail, LuSend } from "react-icons/lu";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import theme from "../theme/theme";
+import { useAuth } from "./AuthContext";
+import { maskEmail } from "../utils/email";
 import { Alert, Button, Container, Field, Input, Select, Textarea } from "../components/ui";
+import AdminOrders from "../components/admin/AdminOrders";
 import "./AdminPage.css";
-
-const EMAILJS_SERVICE_ID  = "service_sl4riwk";
-const EMAILJS_TEMPLATE_ID = "template_9x590cp";
-const EMAILJS_PUBLIC_KEY  = "-hEJpslk_NuP-9qRA";
 
 const DEFAULT_MESSAGE = "Thank you for your purchase! Your plan is now active. Use the link below to access your content.";
 
-// Preset plan links — selecting one in the dropdown auto-fills both
-// the plan duration and the Google Drive link fields below.
-const PLAN_LINKS = [
-  { label: "3 Months", duration: "3 Months", link: "https://drive.google.com/file/d/1wOtQ2swpw5oyYAJS6GT6ZWxFO0b7AilW/view?usp=drive_link" },
-  { label: "6 Months", duration: "6 Months", link: "https://drive.google.com/file/d/1gr5GEANvYMfphthC2jnXrS05pzf88A9b/view?usp=drive_link" },
-  { label: "12 Months", duration: "12 Months", link: "https://drive.google.com/file/d/1iQSM-tB-PRXLO__gFshkwTBYDe6dm2TQ/view?usp=drive_link" },
-];
+const FEED_TIMEOUT_MS = 10000;
 
-function maskEmail(email) {
-  const [user, domain] = email.split("@");
-  const masked = user[0] + "***" + (user.length > 3 ? user[user.length - 1] : "");
-  return masked + "@" + domain;
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms)),
+  ]);
 }
 
 function usePersisted(key, defaultValue) {
@@ -46,6 +39,7 @@ function usePersisted(key, defaultValue) {
 }
 
 export default function AdminPage() {
+  const { authRequest } = useAuth();
   const [customerEmail, setCustomerEmail] = usePersisted("dl_email", "");
   const [productName,   setProductName]   = usePersisted("dl_product", "");
   const [planDuration,  setPlanDuration]  = usePersisted("dl_duration", "");
@@ -56,61 +50,90 @@ export default function AdminPage() {
   const [status,  setStatus]  = useState(null);
   const [sending, setSending] = useState(false);
 
+  const [presets, setPresets] = useState([]);
+  const [presetsError, setPresetsError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    authRequest("/admin/delivery-presets")
+      .then((data) => !cancelled && setPresets(Array.isArray(data.presets) ? data.presets : []))
+      .catch((err) => !cancelled && setPresetsError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [authRequest]);
+
   const canSend = customerEmail && productName && planDuration && driveLink;
 
   const handlePlanSelect = (e) => {
     const value = e.target.value;
     setSelectedPlan(value);
     if (!value) return;
-    const plan = PLAN_LINKS.find(p => p.label === value);
+    const plan = presets.find(p => p.label === value);
     if (plan) {
       setPlanDuration(plan.duration);
       setDriveLink(plan.link);
     }
   };
 
+  const deliveryFormRef = useRef(null);
+  const fillFromOrder = ({ email, productName: name, planDuration: duration }) => {
+    setCustomerEmail(email);
+    setProductName(name);
+    setPlanDuration(duration);
+    setSelectedPlan("");
+    setStatus(null);
+    deliveryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const sendSeq = useRef(0);
+
   const handleSend = async () => {
+    const sendId = ++sendSeq.current;
     setSending(true);
     setStatus(null);
     try {
-      await emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ID,
-        {
-          to_email:      customerEmail,
-          product_name:  productName,
-          plan_duration: planDuration,
-          drive_link:    driveLink,
-          message:       message,
-        },
-        EMAILJS_PUBLIC_KEY
-      );
-
-      await addDoc(collection(db, "orders"), {
-        maskedEmail:  maskEmail(customerEmail),
-        productName:  productName,
-        planDuration: planDuration,
-        createdAt:    serverTimestamp(),
+      await authRequest("/admin/deliveries", {
+        method: "POST",
+        body: { customerEmail, productName, planDuration, driveLink, message },
+        fallbackError: "Send failed. Try again.",
       });
-
-      setStatus({ type: "success", text: `Email sent to ${customerEmail}` });
-
-      // clear only email and drive link after send — keep product/duration/message
-      setCustomerEmail("");
-      setDriveLink("");
-      setSelectedPlan("");
-
     } catch (err) {
-      console.error(err);
-      setStatus({ type: "error", text: "Send failed. Check your config." });
-    } finally {
+      setStatus({ type: "error", text: err.message });
       setSending(false);
+      return;
+    }
+
+    const sentTo = customerEmail;
+    setStatus({ type: "success", text: `Email sent to ${sentTo}` });
+    setCustomerEmail("");
+    setDriveLink("");
+    setSelectedPlan("");
+    setSending(false);
+
+    try {
+      await withTimeout(
+        addDoc(collection(db, "orders"), {
+          maskedEmail:  maskEmail(sentTo),
+          productName:  productName,
+          planDuration: planDuration,
+          createdAt:    serverTimestamp(),
+        }),
+        FEED_TIMEOUT_MS
+      );
+    } catch (err) {
+      console.error("[Admin] orders feed update failed:", err);
+      if (sendSeq.current === sendId) {
+        setStatus({ type: "warning", text: `Email sent to ${sentTo}, but the public orders feed couldn't be updated.` });
+      }
     }
   };
 
   return (
     <Container narrow className="admin">
-      <div className="admin__card">
+      <AdminOrders onUseForDelivery={fillFromOrder} />
+
+      <div className="admin__card" ref={deliveryFormRef}>
         <header className="admin__header">
           <span className="ui-icon-tile">
             <LuMail aria-hidden="true" />
@@ -139,10 +162,14 @@ export default function AdminPage() {
             </Field>
           </div>
 
-          <Field label="Quick-fill plan link" htmlFor="admin-plan" hint="Auto-fills plan duration and the Drive link below.">
+          <Field
+            label="Quick-fill plan link"
+            htmlFor="admin-plan"
+            hint={presetsError ? `Couldn't load presets: ${presetsError}` : "Auto-fills plan duration and the Drive link below."}
+          >
             <Select id="admin-plan" value={selectedPlan} onChange={handlePlanSelect}>
               <option value="">Choose a plan…</option>
-              {PLAN_LINKS.map(p => (
+              {presets.map(p => (
                 <option key={p.label} value={p.label}>{p.label}</option>
               ))}
             </Select>
@@ -179,7 +206,7 @@ export default function AdminPage() {
           </Button>
 
           {status && (
-            <Alert variant={status.type === "success" ? "success" : "danger"}>{status.text}</Alert>
+            <Alert variant={status.type === "error" ? "danger" : status.type}>{status.text}</Alert>
           )}
         </div>
       </div>

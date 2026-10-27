@@ -1,80 +1,61 @@
 import React from "react";
-import { LuTrophy, LuZap, LuUsers, LuRefreshCw, LuArrowRight } from "react-icons/lu";
+import { LuBadgeCheck, LuClock, LuUser, LuRefreshCw, LuArrowRight } from "react-icons/lu";
 import theme from "../theme/theme";
-import { Button, CtaPanel, FeatureGrid, PageHeader, Section, SectionHeader, StatStrip } from "../components/ui";
+import { Button, CtaPanel, FeatureGrid, PageHeader, Section, SectionHeader } from "../components/ui";
 import "./ContentPages.css";
 
-const stats = [
-  { value: "2021", label: "Founded" },
-  { value: "50K+", label: "Traders Served" },
-  { value: "100%", label: "Success Rate" },
-  { value: "24/7", label: "Support" },
-];
-
 const values = [
-  { Icon: LuTrophy, title: "Quality First", text: "Every product is tested and verified before delivery. We never compromise on what we offer to our community." },
-  { Icon: LuZap, title: "Instant Delivery", text: "Your subscription activates within minutes. No waiting, no delays — we respect your time." },
-  { Icon: LuUsers, title: "Built on Trust", text: "50,000+ traders have placed their confidence in us. That trust is our most valuable asset." },
-  { Icon: LuRefreshCw, title: "Always Supported", text: "If anything stops working, we replace it immediately. Our commitment doesn't end at purchase." },
+  { Icon: LuBadgeCheck, title: "Quality first", text: "Every product is tested and verified before delivery." },
+  { Icon: LuClock, title: "Prompt delivery", text: "Access details usually arrive within 15–30 minutes of your payment being verified." },
+  { Icon: LuUser, title: "Your own account", text: "Plans are for your own account — single ownership, not a shared login." },
+  { Icon: LuRefreshCw, title: "Always supported", text: "If something stops working during your plan, we replace it." },
 ];
 
 const About = () => {
-  const { name } = theme.brand;
+  const { name, foundedYear } = theme.brand;
 
   return (
     <div className="content-page">
       <PageHeader
-        eyebrow="Our story"
-        title="Premium products. Honest prices."
-        description={`Since 2021, ${name} has been India's most trusted destination for premium digital subscriptions and tools.`}
+        title="About us"
+        description={`${name} sells software subscriptions, trading tools and courses. We've been doing it since ${foundedYear}.`}
       />
 
-      <Section>
-        <StatStrip items={stats} />
-      </Section>
-
       <Section narrow>
-        <SectionHeader eyebrow="Who we are" title={name} />
+        <SectionHeader title="Premium products. Honest prices." />
         <div className="ui-prose">
           <p>
-            Welcome to <strong>{name}</strong> — a leading digital product store established in 2021. Over the years, we
-            have built a loyal community of over <strong>50,000 traders and digital enthusiasts</strong> who trust us for
-            high-quality products that enhance their lifestyle and trading edge.
+            <strong>{name}</strong> started in {foundedYear} with a simple aim: make the premium tools people rely on every
+            day available at prices more of them can afford. What began with trading tools now includes software
+            subscriptions and courses.
           </p>
           <p>
-            Our mission is simple: deliver <strong>premium digital tools at prices that are accessible to everyone</strong>.
-            Whether you're a seasoned trader seeking TradingView Premium or a tech enthusiast looking for the best digital
-            subscriptions, we have you covered — instantly.
+            Every order is handled by a person. You pay by UPI, we match your payment against our bank statement, and then
+            we send your access details — usually within 15–30 minutes.
           </p>
           <p>
-            At {name}, we understand that in the fast-moving world of digital products,{" "}
-            <strong>quality and reliability are non-negotiable</strong>. That's why we carefully vet every product we offer
-            and stand behind every single order with our replacement guarantee.
-          </p>
-          <p>
-            Our community is the heart of our success. We're proud to have helped thousands of individuals elevate their
-            digital experience — and we're just getting started. As we grow, our commitment to{" "}
-            <strong>personalized service, swift support, and honest pricing</strong> will never waver.
+            We vet the products we list and stand behind each plan with a replacement guarantee for its full length. If you
+            have a question before or after you buy, you'll get an answer from us on WhatsApp or Telegram.
           </p>
         </div>
       </Section>
 
       <Section>
-        <SectionHeader eyebrow="What we stand for" title="Our core values" />
-        <FeatureGrid items={values} columns={4} />
+        <SectionHeader title="What we stand for" />
+        <FeatureGrid items={values} columns={4} plain />
       </Section>
 
       <Section>
         <CtaPanel
-          title="Ready to get started?"
-          text={`Join 50,000+ satisfied customers and experience ${name} today.`}
+          title="Find the right plan"
+          text="Browse the catalog, or ask us anything before you buy."
           actions={
             <>
               <Button to="/" variant="primary" size="lg" iconRight={<LuArrowRight />}>
                 Browse products
               </Button>
               <Button to="/contact" variant="secondary" size="lg">
-                Get in touch
+                Contact us
               </Button>
             </>
           }
