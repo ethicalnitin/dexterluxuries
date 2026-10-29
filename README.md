@@ -1,4 +1,4 @@
-# MKR Tools & Softwares — store
+
 
 A digital-product store: a React storefront, an Express + MongoDB API, manual
 UPI payment verification, and an admin page for delivering access by email.
